@@ -13,6 +13,7 @@ function saveMyClaim(id) {
 }
 
 let activeListings = [];
+let uploadedImageBase64 = '';
 
 async function loadFeed() {
   try {
@@ -30,7 +31,7 @@ async function loadFeed() {
 function renderListings() {
   const myClaims = getMyClaimedListings();
 
-  // Smart De-duplicator: Same Title aur Same Address ki sirf 1 entry dikhayega
+  // De-duplicator
   const uniqueList = [];
   const seenKeys = new Set();
 
@@ -78,6 +79,16 @@ function renderListings() {
 
     return `
       <div style="background: #18181b; border: 1px solid #27272a; padding: 18px; border-radius: 14px; color: #f4f4f5; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+        
+        ${item.image ? `
+          <div style="position: relative; margin-bottom: 12px; border-radius: 10px; overflow: hidden; max-height: 170px;">
+            <img src="${item.image}" alt="Verified Food" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+            <span style="position: absolute; top: 8px; left: 8px; background: rgba(16, 185, 129, 0.9); color: #000; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px;">
+              🛡️ Image Verified
+            </span>
+          </div>
+        ` : ''}
+
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <span style="font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 9999px; ${isClaimedByMe ? 'background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3);' : 'background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.3);'}">
             ${isClaimedByMe ? '🟡 Claimed by You (En Route)' : '🟢 Available'}
@@ -133,7 +144,31 @@ async function claim(id, address) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank');
 }
 
-// ---------------- LIVE GPS & AUTOCOMPLETE LOGIC ----------------
+// ---------------- IMAGE UPLOAD & PREVIEW HANDLER ----------------
+function setupImageUpload() {
+  const fileInput = document.getElementById('food-image-input');
+  const previewContainer = document.getElementById('image-preview-container');
+  const previewImg = document.getElementById('food-image-preview');
+
+  if (!fileInput) return;
+
+  fileInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        uploadedImageBase64 = evt.target.result;
+        if (previewImg && previewContainer) {
+          previewImg.src = uploadedImageBase64;
+          previewContainer.style.display = 'block';
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+}
+
+// ---------------- ADDRESS AUTOCOMPLETE ----------------
 function setupAddressAutocomplete() {
   const addressInput = document.querySelector('input[placeholder*="landmark"]') || 
                        document.querySelector('input[placeholder*="Delhi"]') || 
@@ -143,75 +178,76 @@ function setupAddressAutocomplete() {
   if (!addressInput) return;
 
   const parent = addressInput.parentElement;
+  
   const oldBtn = document.getElementById('gps-locate-btn');
   if (oldBtn) oldBtn.remove();
-  addressInput.style.paddingRight = '14px';
+  const oldHeaders = parent.querySelectorAll('.location-header-row');
+  oldHeaders.forEach(h => h.remove());
 
-  const label = parent.querySelector('label') || parent.previousElementSibling;
+  let existingLabel = parent.querySelector('label') || parent.previousElementSibling;
   
-  let headerRow = parent.querySelector('.location-header-row');
-  if (!headerRow) {
-    headerRow = document.createElement('div');
-    headerRow.className = 'location-header-row';
-    headerRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;';
+  let headerRow = document.createElement('div');
+  headerRow.className = 'location-header-row';
+  headerRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;';
 
-    const gpsBtn = document.createElement('button');
-    gpsBtn.id = 'gps-locate-btn';
-    gpsBtn.type = 'button';
-    gpsBtn.innerHTML = '🎯 Use My Current GPS';
-    gpsBtn.style.cssText = 'background: rgba(16,185,129,0.15); color: #34d399; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(16,185,129,0.3); cursor: pointer; display: inline-flex; align-items: center; gap: 4px;';
+  const labelTitle = document.createElement('span');
+  labelTitle.textContent = 'Pickup address (Delhi / Noida)';
+  labelTitle.style.cssText = 'font-size: 13px; color: #94a3b8; font-weight: 500;';
 
-    if (label && label.tagName === 'LABEL') {
-      label.style.marginBottom = '0';
-      headerRow.appendChild(label.cloneNode(true));
-      label.replaceWith(headerRow);
-      headerRow.appendChild(gpsBtn);
-    } else {
-      parent.insertBefore(headerRow, addressInput);
-      headerRow.innerHTML = `<span style="font-size:12px; color:#94a3b8; font-weight:600;">Pickup Address</span>`;
-      headerRow.appendChild(gpsBtn);
+  const gpsBtn = document.createElement('button');
+  gpsBtn.id = 'gps-locate-btn';
+  gpsBtn.type = 'button';
+  gpsBtn.innerHTML = '🎯 Use My Current GPS';
+  gpsBtn.style.cssText = 'background: rgba(16,185,129,0.15); color: #34d399; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(16,185,129,0.3); cursor: pointer; display: inline-flex; align-items: center; gap: 4px;';
+
+  headerRow.appendChild(labelTitle);
+  headerRow.appendChild(gpsBtn);
+
+  if (existingLabel && (existingLabel.tagName === 'LABEL' || existingLabel.textContent.includes('Pickup address'))) {
+    existingLabel.replaceWith(headerRow);
+  } else {
+    parent.insertBefore(headerRow, addressInput);
+  }
+
+  gpsBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!navigator.geolocation) {
+      alert('Geolocation not supported.');
+      return;
     }
 
-    gpsBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (!navigator.geolocation) {
-        alert('Geolocation not supported.');
-        return;
-      }
+    gpsBtn.innerHTML = '⏳ Locating...';
+    gpsBtn.style.color = '#fbbf24';
 
-      gpsBtn.innerHTML = '⏳ Locating...';
-      gpsBtn.style.color = '#fbbf24';
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
 
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
-
-          try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`);
-            const data = await res.json();
-            if (data && data.display_name) {
-              addressInput.value = data.display_name;
-              gpsBtn.innerHTML = '✅ Located';
-            } else {
-              addressInput.value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-              gpsBtn.innerHTML = '✅ GPS Coords';
-            }
-          } catch {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`);
+          const data = await res.json();
+          if (data && data.display_name) {
+            addressInput.value = data.display_name;
+            gpsBtn.innerHTML = '✅ Located';
+          } else {
             addressInput.value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-            gpsBtn.innerHTML = '✅ Coords Set';
+            gpsBtn.innerHTML = '✅ GPS Coords';
           }
-          setTimeout(() => { gpsBtn.innerHTML = '🎯 Use My Current GPS'; gpsBtn.style.color = '#34d399'; }, 3000);
-        },
-        () => {
-          alert('Please allow location permission in browser.');
-          gpsBtn.innerHTML = '❌ Denied';
-          gpsBtn.style.color = '#f87171';
-          setTimeout(() => { gpsBtn.innerHTML = '🎯 Use My Current GPS'; gpsBtn.style.color = '#34d399'; }, 3000);
+        } catch {
+          addressInput.value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+          gpsBtn.innerHTML = '✅ Coords Set';
         }
-      );
-    });
-  }
+        setTimeout(() => { gpsBtn.innerHTML = '🎯 Use My Current GPS'; gpsBtn.style.color = '#34d399'; }, 3000);
+      },
+      () => {
+        alert('Please allow location permission in browser.');
+        gpsBtn.innerHTML = '❌ Denied';
+        gpsBtn.style.color = '#f87171';
+        setTimeout(() => { gpsBtn.innerHTML = '🎯 Use My Current GPS'; gpsBtn.style.color = '#34d399'; }, 3000);
+      }
+    );
+  });
 
   let dropdown = document.getElementById('address-dropdown');
   if (!dropdown) {
@@ -254,7 +290,7 @@ function setupAddressAutocomplete() {
         } else {
           dropdown.style.display = 'none';
         }
-      } catch (err) {
+      } catch {
         dropdown.style.display = 'none';
       }
     }, 300);
@@ -267,7 +303,7 @@ function setupAddressAutocomplete() {
   });
 }
 
-// ---------------- STRICT SINGLE SUBMISSION ----------------
+// ---------------- STRICT VALIDATION & SINGLE SUBMIT ----------------
 let isSubmitting = false;
 
 function setupDonationForm() {
@@ -289,8 +325,19 @@ function setupDonationForm() {
     const qtyInput = document.querySelector('input[placeholder*="servings"]') || document.querySelector('input[name="quantity"]');
     const phoneInput = document.querySelector('input[placeholder*="43210"]') || document.querySelector('input[type="tel"]') || document.querySelector('input[name="phone"]');
 
-    if (!itemInput || !addressInput || !itemInput.value.trim() || !addressInput.value.trim()) {
-      alert('Please fill at least the Food item and Pickup address!');
+    if (!itemInput || !itemInput.value.trim()) {
+      alert('⚠️ Please specify what food you are donating.');
+      return;
+    }
+
+    if (!addressInput || !addressInput.value.trim()) {
+      alert('⚠️ Please provide a pickup address or use GPS.');
+      return;
+    }
+
+    // SPAM GUARD: Mandatory Photo check
+    if (!uploadedImageBase64) {
+      alert('📸 Verification Required: Please upload/take a photo of the food to prevent spam posts.');
       return;
     }
 
@@ -303,6 +350,7 @@ function setupDonationForm() {
       expiry_hours: 3,
       address: addressInput.value.trim(),
       phone: phoneInput && phoneInput.value.trim() ? phoneInput.value.trim() : '+91 98996 36474',
+      image: uploadedImageBase64,
       status: 'AVAILABLE'
     };
 
@@ -317,10 +365,16 @@ function setupDonationForm() {
       });
     } catch (err) {}
 
+    // Reset Form
     itemInput.value = '';
     addressInput.value = '';
     if (qtyInput) qtyInput.value = '';
     if (phoneInput) phoneInput.value = '';
+    uploadedImageBase64 = '';
+    const previewContainer = document.getElementById('image-preview-container');
+    const fileInput = document.getElementById('food-image-input');
+    if (previewContainer) previewContainer.style.display = 'none';
+    if (fileInput) fileInput.value = '';
 
     setTimeout(() => { isSubmitting = false; }, 600);
   };
@@ -329,14 +383,15 @@ function setupDonationForm() {
   else if (postBtn) postBtn.onclick = submitAction;
 }
 
-// ---------------- INITIALIZE ----------------
 window.addEventListener('DOMContentLoaded', () => {
   loadFeed();
+  setupImageUpload();
   setupAddressAutocomplete();
   setupDonationForm();
 });
 
 setTimeout(() => {
+  setupImageUpload();
   setupAddressAutocomplete();
   setupDonationForm();
 }, 400);

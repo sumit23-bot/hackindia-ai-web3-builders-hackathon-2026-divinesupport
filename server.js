@@ -4,28 +4,33 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
 
-mongoose.connect('mongodb://127.0.0.1:27017/foodloop')
-  .then(() => console.log('✅ MongoDB Connected'))
-  .catch(() => console.log('⚠️ Using Memory Fallback'));
+// Image uploads crash na ho isliye 50mb limit
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+const MONGO_URI = 'mongodb://127.0.0.1:27017/foodloop';
+
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('✅ Connected to Local MongoDB Database!'))
+  .catch((err) => console.error('❌ Connection Failed:', err.message));
 
 const DonationSchema = new mongoose.Schema({
-  title: String,
-  food_type: String,
-  quantity: String,
-  expiry_hours: Number,
-  address: String,
-  phone: String,
+  title: { type: String, required: true },
+  food_type: { type: String, default: 'Vegetarian' },
+  quantity: { type: String, required: true },
+  expiry_hours: { type: Number, default: 3 },
+  address: { type: String, required: true },
+  phone: { type: String, default: '+91 98996 36474' },
+  image: { type: String, default: '' },
+  is_verified: { type: Boolean, default: true },
   status: { type: String, default: 'AVAILABLE' },
   created_at: { type: Date, default: Date.now }
 });
 
 const Donation = mongoose.model('Donation', DonationSchema);
 
-let memoryDonations = [
-  { id: '1', title: '50 Meals Dal Makhani & Roti', quantity: '50 servings', expiry_hours: 3, address: 'Sector 62, Noida, Uttar Pradesh', phone: '+91 98765 43210', status: 'AVAILABLE' }
-];
+let memoryDonations = [];
 
 app.get('/api/donations', async (req, res) => {
   try {
@@ -41,7 +46,7 @@ app.post('/api/donations', async (req, res) => {
     const newItem = new Donation(req.body);
     await newItem.save();
     res.status(201).json(newItem);
-  } catch {
+  } catch (err) {
     const fallbackItem = { id: Date.now().toString(), ...req.body, status: 'AVAILABLE' };
     memoryDonations.unshift(fallbackItem);
     res.status(201).json(fallbackItem);
@@ -50,7 +55,11 @@ app.post('/api/donations', async (req, res) => {
 
 app.patch('/api/donations/:id/claim', async (req, res) => {
   try {
-    const updated = await Donation.findByIdAndUpdate(req.params.id, { status: 'CLAIMED' }, { new: true });
+    const updated = await Donation.findByIdAndUpdate(
+      req.params.id, 
+      { status: 'CLAIMED' }, 
+      { new: true }
+    );
     res.json(updated);
   } catch {
     const item = memoryDonations.find(d => String(d.id) === String(req.params.id) || String(d._id) === String(req.params.id));

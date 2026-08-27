@@ -52,22 +52,130 @@
 
     <section class="section how-section" id="how-it-works"><div class="container"><div class="section-heading compact"><div><p class="eyebrow"><span class="eyebrow-line"></span> The simple version</p><h2>From extra to impact<br>in <em>three steps.</em></h2></div></div><div class="steps"><article class="step"><span class="step-no">01</span><i class="fa-solid fa-camera-retro"></i><h3>Post</h3><p>Share what you have, where it is, and when it is safe to eat.</p></article><article class="step"><span class="step-no">02</span><i class="fa-solid fa-tower-broadcast"></i><h3>Alert</h3><p>Our nearby NGO and volunteer network gets a live notification.</p></article><article class="step"><span class="step-no">03</span><i class="fa-solid fa-route"></i><h3>Deliver</h3><p>A trusted partner claims the pickup and closes the loop.</p></article></div></div></section>
 
-    <section class="section hub-section" id="rescue-hub"><div class="container"><div class="section-heading"><div><p class="eyebrow"><span class="eyebrow-line"></span> The live board</p><h2>Rescue hub <span class="live-badge"><span class="pulse"></span> Live</span></h2></div><p>Every listing is a chance to make today a little more nourishing.</p></div><div class="hub-grid"><form class="donor-form" id="donor-form"><div class="form-heading"><span class="form-icon"><i class="fa-solid fa-plus"></i></span><div><h3>Post a donation</h3><p>Tell us what you can share.</p></div></div><label>Food item<input name="food" type="text" placeholder="e.g. 40 vegetable biryanis" required></label><div class="form-row"><label>Category<select name="category"><option>Vegetarian</option><option>Non-vegetarian</option><option>Vegan</option></select></label><label>Quantity<input name="quantity" type="text" placeholder="e.g. 40 servings" required></label></div><label>Safe consumption window<select name="window"><option>Within 2 hours</option><option>Within 4 hours</option><option>By end of day</option><option>Tomorrow morning</option></select></label><label>Pickup address <small>(Delhi / Noida)</small><input name="address" type="text" placeholder="Area, landmark, city" required></label><label>Contact phone<input name="phone" type="tel" placeholder="+91 98765 43210" required></label><button class="button button-primary submit-button" type="submit">Publish donation <i class="fa-solid fa-arrow-right"></i></button><p class="form-footnote"><i class="fa-solid fa-shield-heart"></i> Your details are only shared with the claiming partner.</p></form><div class="feed-panel"><div class="feed-heading"><div><h3>Nearby donations</h3><p id="listing-count">Loading active listings...</p></div><button class="icon-button" id="refresh-feed" type="button" aria-label="Refresh listings"><i class="fa-solid fa-arrows-rotate"></i></button></div><div class="listing-feed" id="listing-feed" aria-live="polite"></div></div></div></div></section>
+    <section class="section hub-section" id="rescue-hub">
+      <div class="container">
+        <div class="section-heading">
+          <div><p class="eyebrow"><span class="eyebrow-line"></span> The live board</p><h2>Rescue hub <span class="live-badge"><span class="pulse"></span> Live</span></h2></div>
+          <p>Every listing is a chance to make today a little more nourishing.</p>
+        </div>
+        <div class="hub-grid">
+          <form class="donor-form" id="donor-form">
+            <div class="form-heading">
+              <span class="form-icon"><i class="fa-solid fa-plus"></i></span>
+              <div><h3>Post a donation</h3><p>Tell us what you can share.</p></div>
+            </div>
 
-    <section class="contact-section" id="contact"><div class="container contact-grid"><div><p class="eyebrow"><span class="eyebrow-line"></span> Need a hand?</p><h2>Let's keep good food<br>in the <em>right hands.</em></h2><p class="contact-copy">For urgent food rescue coordination, partnerships, or general questions, our small team is here.</p><div class="helpline"><span><i class="fa-solid fa-phone"></i></span><div><small>Emergency coordinator</small><strong><a href="tel:+918800247247" style="text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 12px; cursor: pointer;">
-  <div style="background: rgba(0,0,0,0.15); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;">
-    📞
-  </div>
-  <div>
-    <div style="font-size: 12px; opacity: 0.8; margin-bottom: 2px;">Emergency coordinator</div>
-    <div style="font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-      +91 8800 247 247 
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-    </div>
-  </div>
-</a></strong></div><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div><form class="contact-form" id="contact-form"><h3>Send a note</h3><input type="text" name="name" placeholder="Your name" required><input type="email" name="email" placeholder="Email address" required><textarea name="message" rows="3" placeholder="How can we help?" required></textarea><button class="button button-outline" type="submit">Send message <i class="fa-solid fa-paper-plane"></i></button></form></div></section>
+            <!-- Mandatory Proof of Food Photo -->
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; font-size: 13px; color: #94a3b8; font-weight: 500; margin-bottom: 6px;">
+                📸 Proof of Food (Photo Verification)
+              </label>
+              <input 
+                type="file" 
+                id="food-image-input" 
+                accept="image/*" 
+                capture="environment"
+                style="width: 100%; padding: 10px; background: #18181b; border: 1px dashed #3f3f46; border-radius: 8px; color: #a1a1aa; font-size: 12px; cursor: pointer; box-sizing: border-box;" 
+                required
+              />
+              <div id="image-preview-container" style="display: none; margin-top: 10px; position: relative;">
+                <img id="food-image-preview" src="" alt="Food Preview" style="width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; border: 1px solid #27272a;" />
+                <span style="position: absolute; bottom: 8px; right: 8px; background: rgba(16,185,129,0.9); color: #000; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px;">
+                  ✅ Photo Verified
+                </span>
+              </div>
+            </div>
+
+            <label>Food item<input name="food" type="text" placeholder="e.g. 40 vegetable biryanis" required></label>
+            <div class="form-row">
+              <label>Category
+                <select name="category">
+                  <option>Vegetarian</option>
+                  <option>Non-vegetarian</option>
+                  <option>Vegan</option>
+                </select>
+              </label>
+              <label>Quantity<input name="quantity" type="text" placeholder="e.g. 40 servings" required></label>
+            </div>
+            <label>Safe consumption window
+              <select name="window">
+                <option>Within 2 hours</option>
+                <option>Within 4 hours</option>
+                <option>By end of day</option>
+                <option>Tomorrow morning</option>
+              </select>
+            </label>
+            <label>Pickup address <small>(Delhi / Noida)</small><input name="address" type="text" placeholder="Area, landmark, city" required></label>
+            <label>Contact phone<input name="phone" type="tel" placeholder="+91 98765 43210" required></label>
+            <button class="button button-primary submit-button" type="submit" id="publish-donation-btn">Publish donation <i class="fa-solid fa-arrow-right"></i></button>
+            <p class="form-footnote"><i class="fa-solid fa-shield-heart"></i> Your details are only shared with the claiming partner.</p>
+          </form>
+
+          <div class="feed-panel">
+            <div class="feed-heading">
+              <div><h3>Nearby donations</h3><p id="listing-count">Loading active listings...</p></div>
+              <button class="icon-button" id="refresh-feed" type="button" aria-label="Refresh listings"><i class="fa-solid fa-arrows-rotate"></i></button>
+            </div>
+            <div class="listing-feed" id="listing-feed" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="contact-section" id="contact">
+      <div class="container contact-grid">
+        <div>
+          <p class="eyebrow"><span class="eyebrow-line"></span> Need a hand?</p>
+          <h2>Let's keep good food<br>in the <em>right hands.</em></h2>
+          <p class="contact-copy">For urgent food rescue coordination, partnerships, or general questions, our small team is here.</p>
+          <div class="helpline">
+            <span><i class="fa-solid fa-phone"></i></span>
+            <div>
+              <small>Emergency coordinator</small>
+              <strong>
+                <a href="tel:+918800247247" style="text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 12px; cursor: pointer;">
+                  <div style="background: rgba(0,0,0,0.15); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    📞
+                  </div>
+                  <div>
+                    <div style="font-size: 12px; opacity: 0.8; margin-bottom: 2px;">Emergency coordinator</div>
+                    <div style="font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                      +91 8800 247 247 
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    </div>
+                  </div>
+                </a>
+              </strong>
+            </div>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </div>
+        </div>
+        <form class="contact-form" id="contact-form">
+          <h3>Send a note</h3>
+          <input type="text" name="name" placeholder="Your name" required>
+          <input type="email" name="email" placeholder="Email address" required>
+          <textarea name="message" rows="3" placeholder="How can we help?" required></textarea>
+          <button class="button button-outline" type="submit">Send message <i class="fa-solid fa-paper-plane"></i></button>
+        </form>
+      </div>
+    </section>
   </main>
-  <footer class="site-footer"><div class="container footer-main"><a class="brand" href="#hero"><span class="brand-mark"><i class="fa-solid fa-arrows-rotate"></i></span><span>food<span class="brand-accent">loop</span></span></a><p>Good food. Better futures.</p><div class="socials"><a href="#contact" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a><a href="#contact" aria-label="LinkedIn"><i class="fa-brands fa-linkedin-in"></i></a><a href="#contact" aria-label="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a></div></div><div class="container footer-bottom"><span>© 2026 FoodLoop Network</span><span>In partnership with <b>Feeding India</b> · <b>Robin Hood Army</b> · <b>Goonj</b></span></div></footer>
+
+  <footer class="site-footer">
+    <div class="container footer-main">
+      <a class="brand" href="#hero"><span class="brand-mark"><i class="fa-solid fa-arrows-rotate"></i></span><span>food<span class="brand-accent">loop</span></span></a>
+      <p>Good food. Better futures.</p>
+      <div class="socials">
+        <a href="#contact" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
+        <a href="#contact" aria-label="LinkedIn"><i class="fa-brands fa-linkedin-in"></i></a>
+        <a href="#contact" aria-label="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <span>© 2026 FoodLoop Network</span>
+      <span>In partnership with <b>Feeding India</b> · <b>Robin Hood Army</b> · <b>Goonj</b></span>
+    </div>
+  </footer>
   <div class="toast" id="toast" role="status"></div>
   <script src="script.js"></script>
 </body>
