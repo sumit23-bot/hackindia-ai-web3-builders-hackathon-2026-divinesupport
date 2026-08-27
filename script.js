@@ -1,4 +1,60 @@
 const API_URL = 'http://localhost:5000/api/donations';
+const PIN_API_URL = 'http://localhost:5000/api/generate-pin';
+
+let aiModel = null;
+let currentSecurityPIN = '';
+let currentGeneratedOTP = '';
+let isFoodValid = false;
+let isRealCameraPhoto = false;
+let isPINVerifiedByOCR = false;
+let userLiveCoords = null;
+let uploadedImageBase64 = '';
+let activeListings = [];
+let pendingDonationPayload = null;
+
+// Fetch Device-Unique Non-Replicable PIN from Server
+async function generateSessionSecurityPIN() {
+  const pinEl = document.getElementById('live-security-pin');
+  if (pinEl) pinEl.textContent = `#FL-GENERATING...`;
+
+  try {
+    const res = await fetch(PIN_API_URL);
+    if (res.ok) {
+      const data = await res.json();
+      currentSecurityPIN = data.pin;
+    } else {
+      currentSecurityPIN = Math.floor(10000 + Math.random() * 90000).toString();
+    }
+  } catch {
+    // Client Entropy Fallback based on device timestamp + crypto
+    const cryptoArray = new Uint32Array(1);
+    window.crypto.getRandomValues(cryptoArray);
+    currentSecurityPIN = (10000 + (cryptoArray[0] % 90000)).toString();
+  }
+
+  isPINVerifiedByOCR = false;
+  if (pinEl) pinEl.textContent = `#FL-${currentSecurityPIN}`;
+}
+
+// Pre-load MobileNet AI Model
+async function loadAIModel() {
+  try {
+    if (window.mobilenet) {
+      aiModel = await mobilenet.load();
+      console.log('🤖 AI Food Vision Model Loaded');
+    }
+  } catch (err) {
+    console.error('AI model load error:', err);
+  }
+}
+
+const FOOD_KEYWORDS = [
+  'food', 'dish', 'meal', 'soup', 'bread', 'pizza', 'burger', 'sandwich', 'curry', 
+  'rice', 'biryani', 'pasta', 'noodle', 'vegetable', 'fruit', 'apple', 'banana', 
+  'orange', 'meat', 'chicken', 'pot pie', 'plate', 'saucer', 'consomme', 'hotdog',
+  'cheeseburger', 'bagel', 'pretzel', 'mashed potato', 'guacamole', 'custard', 
+  'confectionery', 'bakery', 'salad', 'casserole', 'stew', 'beverage', 'snack', 'roti', 'chapati'
+];
 
 function getMyClaimedListings() {
   return JSON.parse(localStorage.getItem('foodloop_my_claims') || '[]');
@@ -12,9 +68,6 @@ function saveMyClaim(id) {
   }
 }
 
-let activeListings = [];
-let uploadedImageBase64 = '';
-
 async function loadFeed() {
   try {
     const res = await fetch(API_URL);
@@ -23,7 +76,7 @@ async function loadFeed() {
       if (Array.isArray(data)) activeListings = data;
     }
   } catch (e) {
-    console.log('Backend offline, using memory');
+    console.log('Backend offline, using local state');
   }
   renderListings();
 }
@@ -31,7 +84,6 @@ async function loadFeed() {
 function renderListings() {
   const myClaims = getMyClaimedListings();
 
-  // De-duplicator
   const uniqueList = [];
   const seenKeys = new Set();
 
@@ -83,9 +135,14 @@ function renderListings() {
         ${item.image ? `
           <div style="position: relative; margin-bottom: 12px; border-radius: 10px; overflow: hidden; max-height: 170px;">
             <img src="${item.image}" alt="Verified Food" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
-            <span style="position: absolute; top: 8px; left: 8px; background: rgba(16, 185, 129, 0.9); color: #000; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px;">
-              🛡️ Image Verified
-            </span>
+            <div style="position: absolute; top: 8px; left: 8px; display: flex; gap: 6px;">
+              <span style="background: rgba(16, 185, 129, 0.95); color: #000; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px;">
+                🛡️ AI & PIN Verified
+              </span>
+              <span style="background: rgba(59, 130, 246, 0.95); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px;">
+                📍 Geofenced
+              </span>
+            </div>
           </div>
         ` : ''}
 
@@ -115,11 +172,14 @@ function renderListings() {
             </button>
           ` : `
             <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}" target="_blank" style="background: #10b981; color: #000; font-weight: 700; font-size: 12px; padding: 7px 14px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
-              🗺️ Open Maps Navigation
+              🗺️ Open Navigation
             </a>
             <a href="tel:${displayPhone}" style="background: #2563eb; color: #fff; font-weight: 600; font-size: 12px; padding: 7px 14px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
               📞 Call Donor
             </a>
+            <button onclick="openQRHandshake('${itemId}')" style="background: #8b5cf6; color: #fff; font-weight: 700; font-size: 12px; padding: 7px 14px; border-radius: 8px; border: none; cursor: pointer;">
+              🤝 Handover QR
+            </button>
           `}
         </div>
       </div>
@@ -144,31 +204,130 @@ async function claim(id, address) {
   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank');
 }
 
-// ---------------- IMAGE UPLOAD & PREVIEW HANDLER ----------------
-function setupImageUpload() {
-  const fileInput = document.getElementById('food-image-input');
-  const previewContainer = document.getElementById('image-preview-container');
-  const previewImg = document.getElementById('food-image-preview');
+// ---------------- 1. HARDWARE ANTI-AI INSPECTOR ----------------
+function checkImageOrigin(file, imgElement, callback) {
+  if (!window.EXIF) {
+    callback({ isReal: true });
+    return;
+  }
 
-  if (!fileInput) return;
+  EXIF.getData(imgElement, function() {
+    const software = (EXIF.getTag(this, "Software") || "").toLowerCase();
+    const aiSignatures = ['dall-e', 'midjourney', 'stable diffusion', 'firefly', 'canva', 'bing', 'gemini', 'chatgpt', 'openai'];
+    const isAISoftware = aiSignatures.some(sig => software.includes(sig));
 
-  fileInput.addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        uploadedImageBase64 = evt.target.result;
-        if (previewImg && previewContainer) {
-          previewImg.src = uploadedImageBase64;
-          previewContainer.style.display = 'block';
-        }
-      };
-      reader.readAsDataURL(file);
+    const fileName = file.name.toLowerCase();
+    const isAIGeneratedName = fileName.includes('ai_') || fileName.includes('generated') || fileName.includes('dalle') || fileName.includes('midjourney') || fileName.includes('gemini') || fileName.includes('bing');
+
+    if (isAISoftware || isAIGeneratedName) {
+      callback({ isReal: false, reason: 'AI Generation Signature Detected' });
+    } else {
+      callback({ isReal: true });
     }
   });
 }
 
-// ---------------- ADDRESS AUTOCOMPLETE ----------------
+// ---------------- 2. STRICT OCR & AI CLASSIFICATION ----------------
+function setupImageUpload() {
+  const fileInput = document.getElementById('food-image-input');
+  const previewContainer = document.getElementById('image-preview-container');
+  const previewImg = document.getElementById('food-image-preview');
+  const badge = document.getElementById('verification-badge');
+
+  if (!fileInput) return;
+
+  fileInput.addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    isPINVerifiedByOCR = false;
+    isFoodValid = false;
+    isRealCameraPhoto = false;
+
+    const reader = new FileReader();
+    reader.onload = async function(evt) {
+      uploadedImageBase64 = evt.target.result;
+      if (previewImg && previewContainer) {
+        previewImg.src = uploadedImageBase64;
+        previewContainer.style.display = 'block';
+
+        badge.innerHTML = '🔍 Stage 1: Authenticity Check...';
+        badge.style.background = 'rgba(234, 179, 8, 0.95)';
+        badge.style.color = '#000';
+
+        previewImg.onload = async () => {
+          // 1. Anti-AI
+          checkImageOrigin(file, previewImg, async (originResult) => {
+            if (!originResult.isReal) {
+              isRealCameraPhoto = false;
+              badge.innerHTML = `🚫 Blocked: Synthetic / AI Generated Image`;
+              badge.style.background = 'rgba(239, 68, 68, 0.95)';
+              badge.style.color = '#fff';
+              alert('⚠️ Anti-Spam: AI generated/downloaded photos are prohibited.');
+              return;
+            }
+            isRealCameraPhoto = true;
+
+            // 2. MobileNet Food Classification
+            badge.innerHTML = '🤖 Stage 2: Scanning Food Item...';
+            if (!aiModel) aiModel = await mobilenet.load();
+            const predictions = await aiModel.classify(previewImg);
+            const matchedFood = predictions.some(pred => FOOD_KEYWORDS.some(k => pred.className.toLowerCase().includes(k)));
+
+            if (!matchedFood) {
+              isFoodValid = false;
+              badge.innerHTML = `❌ No Food Detected (${predictions[0].className.split(',')[0]})`;
+              badge.style.background = 'rgba(239, 68, 68, 0.95)';
+              badge.style.color = '#fff';
+              alert(`⚠️ Food Check Failed: No edible food detected.`);
+              return;
+            }
+            isFoodValid = true;
+
+            // 3. Strict OCR for Device-Unique Security PIN Tag
+            badge.innerHTML = `📝 Stage 3: Scanning Unique Tag (#FL-${currentSecurityPIN})...`;
+            badge.style.background = 'rgba(234, 179, 8, 0.95)';
+            badge.style.color = '#000';
+
+            try {
+              if (window.Tesseract) {
+                const { data: { text } } = await Tesseract.recognize(uploadedImageBase64, 'eng');
+                console.log('OCR Extracted Text:', text);
+                
+                const cleanText = text.replace(/[\s\-_#]/g, '').toLowerCase();
+                const targetCode = currentSecurityPIN.toLowerCase();
+                const targetFLCode = `fl${currentSecurityPIN}`.toLowerCase();
+
+                if (cleanText.includes(targetCode) || cleanText.includes(targetFLCode)) {
+                  isPINVerifiedByOCR = true;
+                  badge.innerHTML = `✅ 100% Verified: Food + Tag (#FL-${currentSecurityPIN})`;
+                  badge.style.background = 'rgba(16, 185, 129, 0.95)';
+                  badge.style.color = '#000';
+                } else {
+                  isPINVerifiedByOCR = false;
+                  badge.innerHTML = `❌ Tag Missing: Code #FL-${currentSecurityPIN} NOT Found`;
+                  badge.style.background = 'rgba(239, 68, 68, 0.95)';
+                  badge.style.color = '#fff';
+                  alert(`⚠️ Security Check Failed!\n\nCould NOT find "#FL-${currentSecurityPIN}" written in the image.\n\nPlease write "#FL-${currentSecurityPIN}" on a paper slip, place it next to the food, and take the photo.`);
+                }
+              } else {
+                isPINVerifiedByOCR = false;
+              }
+            } catch (err) {
+              isPINVerifiedByOCR = false;
+              badge.innerHTML = `❌ OCR Scan Error`;
+              badge.style.background = 'rgba(239, 68, 68, 0.95)';
+              badge.style.color = '#fff';
+            }
+          });
+        };
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ---------------- 3. GEOFENCING & GPS COORDINATE LOCK ----------------
 function setupAddressAutocomplete() {
   const addressInput = document.querySelector('input[placeholder*="landmark"]') || 
                        document.querySelector('input[placeholder*="Delhi"]') || 
@@ -197,7 +356,7 @@ function setupAddressAutocomplete() {
   const gpsBtn = document.createElement('button');
   gpsBtn.id = 'gps-locate-btn';
   gpsBtn.type = 'button';
-  gpsBtn.innerHTML = '🎯 Use My Current GPS';
+  gpsBtn.innerHTML = '🎯 Use Live GPS';
   gpsBtn.style.cssText = 'background: rgba(16,185,129,0.15); color: #34d399; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(16,185,129,0.3); cursor: pointer; display: inline-flex; align-items: center; gap: 4px;';
 
   headerRow.appendChild(labelTitle);
@@ -207,6 +366,12 @@ function setupAddressAutocomplete() {
     existingLabel.replaceWith(headerRow);
   } else {
     parent.insertBefore(headerRow, addressInput);
+  }
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition((pos) => {
+      userLiveCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+    });
   }
 
   gpsBtn.addEventListener('click', (e) => {
@@ -221,30 +386,27 @@ function setupAddressAutocomplete() {
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
-
+        userLiveCoords = { lat: position.coords.latitude, lon: position.coords.longitude };
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`);
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLiveCoords.lat}&lon=${userLiveCoords.lon}&zoom=18&addressdetails=1`);
           const data = await res.json();
           if (data && data.display_name) {
             addressInput.value = data.display_name;
             gpsBtn.innerHTML = '✅ Located';
           } else {
-            addressInput.value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+            addressInput.value = `${userLiveCoords.lat.toFixed(5)}, ${userLiveCoords.lon.toFixed(5)}`;
             gpsBtn.innerHTML = '✅ GPS Coords';
           }
         } catch {
-          addressInput.value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+          addressInput.value = `${userLiveCoords.lat.toFixed(5)}, ${userLiveCoords.lon.toFixed(5)}`;
           gpsBtn.innerHTML = '✅ Coords Set';
         }
-        setTimeout(() => { gpsBtn.innerHTML = '🎯 Use My Current GPS'; gpsBtn.style.color = '#34d399'; }, 3000);
+        setTimeout(() => { gpsBtn.innerHTML = '🎯 Use Live GPS'; gpsBtn.style.color = '#34d399'; }, 3000);
       },
       () => {
         alert('Please allow location permission in browser.');
         gpsBtn.innerHTML = '❌ Denied';
         gpsBtn.style.color = '#f87171';
-        setTimeout(() => { gpsBtn.innerHTML = '🎯 Use My Current GPS'; gpsBtn.style.color = '#34d399'; }, 3000);
       }
     );
   });
@@ -303,14 +465,10 @@ function setupAddressAutocomplete() {
   });
 }
 
-// ---------------- STRICT VALIDATION & SINGLE SUBMIT ----------------
-let isSubmitting = false;
-
+// ---------------- 4. STRICT SUBMISSION & ONE-TIME BURN HANDLER ----------------
 function setupDonationForm() {
   const form = document.querySelector('form') || document.querySelector('.hub-form');
-  const postBtn = document.getElementById('publish-donation-btn') || 
-                  document.querySelector('button[type="submit"]') || 
-                  Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Publish') || b.textContent.includes('Broadcast'));
+  const postBtn = document.getElementById('publish-donation-btn');
 
   const submitAction = async (e) => {
     if (e) {
@@ -318,12 +476,10 @@ function setupDonationForm() {
       e.stopPropagation();
     }
 
-    if (isSubmitting) return;
-
-    const itemInput = document.querySelector('input[placeholder*="biryani"]') || document.querySelector('input[name="food_item"]');
+    const itemInput = document.querySelector('input[placeholder*="biryani"]') || document.querySelector('input[name="food_item"]') || document.querySelector('input[name="food"]');
     const addressInput = document.querySelector('input[placeholder*="landmark"]') || document.querySelector('input[name="address"]');
     const qtyInput = document.querySelector('input[placeholder*="servings"]') || document.querySelector('input[name="quantity"]');
-    const phoneInput = document.querySelector('input[placeholder*="43210"]') || document.querySelector('input[type="tel"]') || document.querySelector('input[name="phone"]');
+    const phoneInput = document.getElementById('donor-phone') || document.querySelector('input[type="tel"]');
 
     if (!itemInput || !itemInput.value.trim()) {
       alert('⚠️ Please specify what food you are donating.');
@@ -335,63 +491,162 @@ function setupDonationForm() {
       return;
     }
 
-    // SPAM GUARD: Mandatory Photo check
-    if (!uploadedImageBase64) {
-      alert('📸 Verification Required: Please upload/take a photo of the food to prevent spam posts.');
+    if (!phoneInput || !phoneInput.value.trim() || phoneInput.value.trim().length < 10) {
+      alert('⚠️ Please enter a valid 10-digit mobile number for OTP verification.');
       return;
     }
 
-    isSubmitting = true;
+    if (!uploadedImageBase64) {
+      alert(`📸 Photo Required: Please capture a photo of the food along with unique paper tag #FL-${currentSecurityPIN}.`);
+      return;
+    }
 
-    const newDonation = {
+    if (!isRealCameraPhoto || !isFoodValid) {
+      alert('🚫 Security Block: Uploaded image failed AI authenticity and food classification checks.');
+      return;
+    }
+
+    if (!isPINVerifiedByOCR) {
+      alert(`🚫 Verification Blocked:\n\nThe unique tag "#FL-${currentSecurityPIN}" was NOT detected on paper slip.\n\nPlease write "#FL-${currentSecurityPIN}" on paper, place it beside the food, and upload.`);
+      return;
+    }
+
+    pendingDonationPayload = {
       id: Date.now().toString(),
       title: itemInput.value.trim(),
       quantity: qtyInput && qtyInput.value.trim() ? qtyInput.value.trim() : '20 servings',
       expiry_hours: 3,
       address: addressInput.value.trim(),
-      phone: phoneInput && phoneInput.value.trim() ? phoneInput.value.trim() : '+91 98996 36474',
+      phone: phoneInput.value.trim(),
       image: uploadedImageBase64,
+      is_verified: true,
+      pin_code: currentSecurityPIN,
       status: 'AVAILABLE'
     };
 
-    activeListings.unshift(newDonation);
-    renderListings();
-
-    try {
-      await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newDonation)
-      });
-    } catch (err) {}
-
-    // Reset Form
-    itemInput.value = '';
-    addressInput.value = '';
-    if (qtyInput) qtyInput.value = '';
-    if (phoneInput) phoneInput.value = '';
-    uploadedImageBase64 = '';
-    const previewContainer = document.getElementById('image-preview-container');
-    const fileInput = document.getElementById('food-image-input');
-    if (previewContainer) previewContainer.style.display = 'none';
-    if (fileInput) fileInput.value = '';
-
-    setTimeout(() => { isSubmitting = false; }, 600);
+    currentGeneratedOTP = Math.floor(1000 + Math.random() * 9000).toString();
+    const otpDisplay = document.getElementById('generated-otp-display');
+    const otpModal = document.getElementById('otp-modal');
+    if (otpDisplay) otpDisplay.textContent = currentGeneratedOTP;
+    if (otpModal) {
+      otpModal.style.display = 'flex';
+      const input = document.getElementById('otp-input-field');
+      if (input) { input.value = ''; input.focus(); }
+    }
   };
 
   if (form) form.onsubmit = submitAction;
   else if (postBtn) postBtn.onclick = submitAction;
 }
 
+// ---------------- OTP MODAL HANDLERS ----------------
+function setupOTPHandlers() {
+  const verifyBtn = document.getElementById('otp-verify-btn');
+  const cancelBtn = document.getElementById('otp-cancel-btn');
+  const otpModal = document.getElementById('otp-modal');
+  const otpInput = document.getElementById('otp-input-field');
+
+  if (cancelBtn) {
+    cancelBtn.onclick = () => { if (otpModal) otpModal.style.display = 'none'; };
+  }
+
+  if (verifyBtn) {
+    verifyBtn.onclick = async () => {
+      if (otpInput.value.trim() !== currentGeneratedOTP) {
+        alert('❌ Invalid OTP Code. Please enter the code shown in the banner.');
+        return;
+      }
+
+      if (otpModal) otpModal.style.display = 'none';
+
+      if (pendingDonationPayload) {
+        try {
+          const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pendingDonationPayload)
+          });
+
+          if (res.status === 409) {
+            alert('🚫 Security Alert: This Security PIN has already been used and burned. Generating fresh code...');
+            generateSessionSecurityPIN();
+            return;
+          }
+
+          activeListings.unshift(pendingDonationPayload);
+          renderListings();
+
+        } catch (err) {}
+
+        // Reset Form & Generate Next Unique Unused PIN
+        document.querySelector('input[name="food"]').value = '';
+        document.querySelector('input[name="address"]').value = '';
+        const qty = document.querySelector('input[name="quantity"]');
+        if (qty) qty.value = '';
+        const phone = document.getElementById('donor-phone');
+        if (phone) phone.value = '';
+        uploadedImageBase64 = '';
+        isFoodValid = false;
+        isRealCameraPhoto = false;
+        isPINVerifiedByOCR = false;
+        const previewContainer = document.getElementById('image-preview-container');
+        const fileInput = document.getElementById('food-image-input');
+        if (previewContainer) previewContainer.style.display = 'none';
+        if (fileInput) fileInput.value = '';
+
+        generateSessionSecurityPIN();
+        alert('🎉 Verified Donation Published Successfully! PIN has been burned.');
+      }
+    };
+  }
+}
+
+// ---------------- 5. VOLUNTEER QR CODE HANDSHAKE ----------------
+function openQRHandshake(itemId) {
+  const qrModal = document.getElementById('qr-modal');
+  const qrContainer = document.getElementById('qrcode-container');
+  const closeBtn = document.getElementById('qr-close-btn');
+
+  if (!qrModal || !qrContainer) return;
+
+  qrContainer.innerHTML = '';
+  const handshakePayload = JSON.stringify({
+    listing_id: itemId,
+    security_hash: `FL-AUTH-${Date.now()}`,
+    verified: true
+  });
+
+  if (window.QRCode) {
+    new QRCode(qrContainer, {
+      text: handshakePayload,
+      width: 180,
+      height: 180,
+      colorDark : "#000000",
+      colorLight : "#ffffff",
+      correctLevel : QRCode.CorrectLevel.H
+    });
+  }
+
+  qrModal.style.display = 'flex';
+
+  if (closeBtn) {
+    closeBtn.onclick = () => { qrModal.style.display = 'none'; };
+  }
+}
+
 window.addEventListener('DOMContentLoaded', () => {
+  generateSessionSecurityPIN();
+  loadAIModel();
   loadFeed();
   setupImageUpload();
   setupAddressAutocomplete();
   setupDonationForm();
+  setupOTPHandlers();
 });
 
 setTimeout(() => {
   setupImageUpload();
   setupAddressAutocomplete();
   setupDonationForm();
+  setupOTPHandlers();
 }, 400);

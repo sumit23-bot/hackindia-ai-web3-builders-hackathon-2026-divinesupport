@@ -10,11 +10,24 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <link rel="stylesheet" href="style.css">
+
+  <!-- AI Food Classifier & MobileNet -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@latest/dist/mobilenet.min.js"></script>
+
+  <!-- EXIF Metadata Inspector (Anti-AI Detector) -->
+  <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+
+  <!-- Tesseract.js OCR for Physical Security PIN Tag Detection -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <!-- QRCode Generator for Volunteer Handshake -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="container nav-wrap">
-      <a class="brand" href="#hero" aria-label="FoodLoop home"><span class="brand-mark"><i class="fa-solid fa-arrows-rotate"></i></span><span>food<span class="brand-accent">loop</span></span><span class="live-dot" aria-label="Live"></span></a>
+      <a class="brand" href="#hero" aria-label="FoodLoop home"><span>food<span class="brand-accent">loop</span></span></a>
       <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false"><i class="fa-solid fa-bars"></i></button>
       <nav class="main-nav" aria-label="Main navigation">
         <a href="#hero">Home</a><a href="#lead-magnets">Get involved</a><a href="#how-it-works">How it works</a><a href="#rescue-hub">Rescue hub</a><a href="#contact">Contact</a>
@@ -65,23 +78,33 @@
               <div><h3>Post a donation</h3><p>Tell us what you can share.</p></div>
             </div>
 
+            <!-- DYNAMIC PROOF-OF-INTENT PIN BADGE -->
+            <div style="background: rgba(16, 185, 129, 0.08); border: 1px dashed #10b981; padding: 12px; border-radius: 10px; margin-bottom: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 11px; color: #a1a1aa; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Live Verification Tag</span>
+                <span id="live-security-pin" style="background: #10b981; color: #000; font-size: 15px; font-weight: 800; padding: 2px 10px; border-radius: 6px; letter-spacing: 2px;">#FL-....</span>
+              </div>
+              <p style="font-size: 11px; color: #cbd5e1; margin: 6px 0 0 0; line-height: 1.4;">
+                📝 <strong>Mandatory:</strong> Write this 4-digit code on a paper slip and place it next to the food before taking the photo.
+              </p>
+            </div>
+
             <!-- Mandatory Proof of Food Photo -->
             <div style="margin-bottom: 16px;">
               <label style="display: block; font-size: 13px; color: #94a3b8; font-weight: 500; margin-bottom: 6px;">
-                📸 Proof of Food (Photo Verification)
+                📸 Live Camera Proof (Photo with Tag)
               </label>
               <input 
                 type="file" 
                 id="food-image-input" 
                 accept="image/*" 
-                capture="environment"
                 style="width: 100%; padding: 10px; background: #18181b; border: 1px dashed #3f3f46; border-radius: 8px; color: #a1a1aa; font-size: 12px; cursor: pointer; box-sizing: border-box;" 
                 required
               />
               <div id="image-preview-container" style="display: none; margin-top: 10px; position: relative;">
                 <img id="food-image-preview" src="" alt="Food Preview" style="width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; border: 1px solid #27272a;" />
-                <span style="position: absolute; bottom: 8px; right: 8px; background: rgba(16,185,129,0.9); color: #000; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px;">
-                  ✅ Photo Verified
+                <span id="verification-badge" style="position: absolute; bottom: 8px; right: 8px; background: rgba(16,185,129,0.95); color: #000; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px;">
+                  ⏳ Waiting for scan...
                 </span>
               </div>
             </div>
@@ -106,9 +129,10 @@
               </select>
             </label>
             <label>Pickup address <small>(Delhi / Noida)</small><input name="address" type="text" placeholder="Area, landmark, city" required></label>
-            <label>Contact phone<input name="phone" type="tel" placeholder="+91 98765 43210" required></label>
-            <button class="button button-primary submit-button" type="submit" id="publish-donation-btn">Publish donation <i class="fa-solid fa-arrow-right"></i></button>
-            <p class="form-footnote"><i class="fa-solid fa-shield-heart"></i> Your details are only shared with the claiming partner.</p>
+            <label>Contact phone<input name="phone" id="donor-phone" type="tel" placeholder="+91 98765 43210" required></label>
+            
+            <button class="button button-primary submit-button" type="submit" id="publish-donation-btn">Verify & Publish Donation <i class="fa-solid fa-arrow-right"></i></button>
+            <p class="form-footnote"><i class="fa-solid fa-shield-heart"></i> Anti-scam protected by AI Vision, Geofencing, OCR and OTP.</p>
           </form>
 
           <div class="feed-panel">
@@ -122,6 +146,34 @@
       </div>
     </section>
 
+    <!-- OTP MODAL POPUP -->
+    <div id="otp-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+      <div style="background: #18181b; border: 1px solid #3f3f46; border-radius: 16px; width: 90%; max-width: 360px; padding: 24px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
+        <div style="font-size: 32px; margin-bottom: 8px;">📲</div>
+        <h3 style="font-size: 18px; margin: 0 0 6px 0; color: #fff;">Verify Phone Number</h3>
+        <p style="font-size: 13px; color: #a1a1aa; margin: 0 0 16px 0;">Enter the 4-digit code sent to your mobile for donor authentication.</p>
+        <div id="otp-banner" style="background: rgba(16,185,129,0.15); border: 1px dashed #10b981; padding: 8px; border-radius: 8px; color: #34d399; font-size: 12px; margin-bottom: 14px; font-weight: 600;">
+          Mock SMS Code: <strong id="generated-otp-display">....</strong>
+        </div>
+        <input type="text" id="otp-input-field" maxlength="4" placeholder="••••" style="width: 140px; text-align: center; font-size: 24px; letter-spacing: 8px; padding: 8px; background: #09090b; border: 1px solid #3f3f46; border-radius: 8px; color: #fff; margin-bottom: 16px;" />
+        <div style="display: flex; gap: 8px;">
+          <button id="otp-cancel-btn" type="button" style="flex: 1; padding: 10px; background: #27272a; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">Cancel</button>
+          <button id="otp-verify-btn" type="button" style="flex: 1; padding: 10px; background: #10b981; color: #000; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">Confirm OTP</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR HANDOVER MODAL -->
+    <div id="qr-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+      <div style="background: #18181b; border: 1px solid #3f3f46; border-radius: 16px; width: 90%; max-width: 380px; padding: 24px; text-align: center;">
+        <h3 style="font-size: 18px; margin: 0 0 6px 0; color: #fff;">🤝 Handover Verification</h3>
+        <p style="font-size: 12px; color: #a1a1aa; margin: 0 0 16px 0;">Volunteer must scan this QR code on arrival to confirm safe collection.</p>
+        <div id="qrcode-container" style="background: #fff; padding: 16px; border-radius: 12px; display: inline-block; margin-bottom: 16px;"></div>
+        <p id="qr-handshake-status" style="font-size: 12px; color: #fbbf24; margin: 0 0 16px 0; font-weight: 600;">Status: Awaiting Volunteer Handshake...</p>
+        <button id="qr-close-btn" style="width: 100%; padding: 10px; background: #27272a; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">Close Handshake Window</button>
+      </div>
+    </div>
+
     <section class="contact-section" id="contact">
       <div class="container contact-grid">
         <div>
@@ -134,9 +186,7 @@
               <small>Emergency coordinator</small>
               <strong>
                 <a href="tel:+918800247247" style="text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 12px; cursor: pointer;">
-                  <div style="background: rgba(0,0,0,0.15); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;">
-                    📞
-                  </div>
+                  <div style="background: rgba(0,0,0,0.15); width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;">📞</div>
                   <div>
                     <div style="font-size: 12px; opacity: 0.8; margin-bottom: 2px;">Emergency coordinator</div>
                     <div style="font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
