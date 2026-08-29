@@ -4,7 +4,6 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -46,55 +45,44 @@ const DonationSchema = new mongoose.Schema({
     lon: { type: Number, default: 77.2090 }
   },
   is_verified: { type: Boolean, default: true },
+  is_food_verified: { type: Boolean, default: true },
+  ai_detected_class: { type: String, default: 'Food' },
   trust_score: { type: Number, default: 100 },
   status: { type: String, default: 'AVAILABLE' },
   claimed_by_ngo: { type: String, default: '' },
   created_at: { type: Date, default: Date.now }
-});
+}, { strict: false });
 const Donation = mongoose.model('Donation', DonationSchema);
+
+// Contact Message Schema
+const ContactSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  message: { type: String, required: true },
+  created_at: { type: Date, default: Date.now }
+});
+const Contact = mongoose.model('Contact', ContactSchema);
 
 let memoryUsers = [
   { name: 'Rohan Sharma', phone: '9811122233', role: 'DONOR', org_name: 'Grand Hyatt Delhi Banquet', is_verified: true, trust_score: 100 },
   { name: 'Priya Verma', phone: '9877788899', role: 'NGO', org_name: 'Robin Hood Army (Delhi Shelter Hub)', ngo_darpan_id: 'DL/2024/008194', is_verified: true, trust_score: 100 }
 ];
 let memoryDonations = [];
+let memoryContacts = [];
 let memoryBlacklist = new Set();
 
-// ---------------- STRICT AUTH ENDPOINTS ----------------
+// Auth Endpoints
 app.post('/api/auth/register', async (req, res) => {
   const { name, phone, role, org_name, ngo_darpan_id } = req.body;
-
   try {
     let existing = await User.findOne({ phone });
-    if (existing) {
-      return res.status(400).json({ error: 'This phone number is already registered. Please Sign In directly.' });
-    }
+    if (existing) return res.status(400).json({ error: 'Phone already registered.' });
 
-    const newUser = new User({
-      name,
-      phone,
-      role,
-      org_name: org_name || name,
-      ngo_darpan_id: ngo_darpan_id || '',
-      is_verified: true
-    });
+    const newUser = new User({ name, phone, role, org_name: org_name || name, ngo_darpan_id: ngo_darpan_id || '', is_verified: true });
     await newUser.save();
     return res.status(201).json(newUser);
   } catch (err) {
-    const existsMem = memoryUsers.find(u => u.phone === phone);
-    if (existsMem) {
-      return res.status(400).json({ error: 'This phone number is already registered. Please Sign In directly.' });
-    }
-    const fallbackUser = {
-      id: Date.now().toString(),
-      name,
-      phone,
-      role,
-      org_name: org_name || name,
-      ngo_darpan_id: ngo_darpan_id || '',
-      is_verified: true,
-      trust_score: 100
-    };
+    const fallbackUser = { id: Date.now().toString(), name, phone, role, org_name: org_name || name, ngo_darpan_id: ngo_darpan_id || '', is_verified: true, trust_score: 100 };
     memoryUsers.push(fallbackUser);
     return res.status(201).json(fallbackUser);
   }
@@ -102,30 +90,18 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   const { phone } = req.body;
-
   try {
     const user = await User.findOne({ phone });
-    if (user) {
-      if (user.is_blacklisted || memoryBlacklist.has(phone)) {
-        return res.status(403).json({ error: 'This account has been banned due to spam activity.' });
-      }
-      return res.json(user);
-    }
+    if (user) return res.json(user);
   } catch (e) {}
 
   const memUser = memoryUsers.find(u => u.phone === phone);
-  if (memUser) {
-    if (memUser.is_blacklisted || memoryBlacklist.has(phone)) {
-      return res.status(403).json({ error: 'This account has been banned due to spam activity.' });
-    }
-    return res.json(memUser);
-  }
+  if (memUser) return res.json(memUser);
 
-  // STRICT REJECTION: User doesn't exist
-  return res.status(404).json({ error: 'Account not found! This phone number is not registered. Please click "Create Verified Account" first.' });
+  return res.status(404).json({ error: 'Account not found! Please register first.' });
 });
 
-// ---------------- DONATIONS ----------------
+// Donation Endpoints
 app.get('/api/donations', async (req, res) => {
   try {
     const list = await Donation.find().sort({ created_at: -1 });
@@ -136,30 +112,22 @@ app.get('/api/donations', async (req, res) => {
 });
 
 app.post('/api/donations', async (req, res) => {
-  const { phone } = req.body;
-
+  const { phone, is_food_verified, ai_detected_class, trust_score } = req.body;
   if (memoryBlacklist.has(phone)) {
-    return res.status(403).json({ error: 'This phone number is permanently blacklisted.' });
+    return res.status(403).json({ error: 'This phone number is blacklisted.' });
   }
 
   try {
-    const donor = await User.findOne({ phone });
-    if (donor && donor.is_blacklisted) {
-      return res.status(403).json({ error: 'Donor is permanently blacklisted.' });
-    }
-
-    let score = donor ? donor.trust_score : 100;
-    const newItem = new Donation({ ...req.body, trust_score: score });
+    const newItem = new Donation({
+      ...req.body,
+      is_food_verified: is_food_verified !== undefined ? is_food_verified : true,
+      ai_detected_class: ai_detected_class || 'Food',
+      trust_score: trust_score !== undefined ? trust_score : 100
+    });
     await newItem.save();
-
-    if (donor) {
-      donor.donations_count += 1;
-      await donor.save();
-    }
-
     res.status(201).json(newItem);
   } catch (err) {
-    const fallbackItem = { id: Date.now().toString(), ...req.body, trust_score: 100, status: 'AVAILABLE' };
+    const fallbackItem = { id: Date.now().toString(), ...req.body, status: 'AVAILABLE' };
     memoryDonations.unshift(fallbackItem);
     res.status(201).json(fallbackItem);
   }
@@ -167,7 +135,6 @@ app.post('/api/donations', async (req, res) => {
 
 app.patch('/api/donations/:id/claim', async (req, res) => {
   const { claimant_phone, claimant_org } = req.body || {};
-
   try {
     const updated = await Donation.findByIdAndUpdate(
       req.params.id, 
@@ -187,20 +154,50 @@ app.patch('/api/donations/:id/claim', async (req, res) => {
 
 app.post('/api/donations/:id/report-fake', async (req, res) => {
   try {
-    const donation = await Donation.findById(req.params.id);
-    if (donation) {
-      donation.status = 'FLAGGED_FAKE';
-      await donation.save();
-      memoryBlacklist.add(donation.phone);
-    }
-    res.json({ message: 'Donor reported.' });
+    await Donation.findByIdAndUpdate(req.params.id, { status: 'FLAGGED_FAKE' });
+    res.json({ message: 'Reported successfully' });
   } catch {
-    const item = memoryDonations.find(d => String(d.id) === String(req.params.id) || String(d._id) === String(req.params.id));
-    if (item) {
-      item.status = 'FLAGGED_FAKE';
-      if (item.phone) memoryBlacklist.add(item.phone);
-    }
-    res.json({ message: 'Donor reported.' });
+    res.json({ message: 'Reported locally' });
+  }
+});
+
+// Contact / Notes Endpoints
+app.post('/api/contact', async (req, res) => {
+  const { name, email, message } = req.body;
+  if (!name || !email || !message) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  try {
+    const newNote = new Contact({ name, email, message });
+    await newNote.save();
+    console.log(`📩 New Help Request from ${name} (${email}): "${message}"`);
+    res.status(201).json({ success: true, note: newNote });
+  } catch (err) {
+    const fallbackNote = { id: Date.now().toString(), name, email, message, created_at: new Date() };
+    memoryContacts.unshift(fallbackNote);
+    console.log(`📩 New Help Request (Memory) from ${name} (${email}): "${message}"`);
+    res.status(201).json({ success: true, note: fallbackNote });
+  }
+});
+
+app.get('/api/contact', async (req, res) => {
+  try {
+    const notes = await Contact.find().sort({ created_at: -1 });
+    res.json(notes.length > 0 ? notes : memoryContacts);
+  } catch {
+    res.json(memoryContacts);
+  }
+});
+
+app.delete('/api/donations/purge-all', async (req, res) => {
+  try {
+    await Donation.deleteMany({});
+    memoryDonations = [];
+    res.json({ message: 'Database cleared' });
+  } catch {
+    memoryDonations = [];
+    res.json({ message: 'Memory cleared' });
   }
 });
 
