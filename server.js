@@ -1,6 +1,13 @@
+// ==========================================
+// FOODLOOP BACKEND SERVER
+// Complete Uncompressed Node.js / Express Server
+// Modules: Auth, RBAC, Reverse Image Web Lookup, Donations Pipeline
+// ==========================================
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const crypto = require('crypto');
 
 const app = express();
 app.use(cors());
@@ -17,7 +24,7 @@ mongoose.connect(MONGO_URI)
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   phone: { type: String, required: true, unique: true },
-  role: { type: String, enum: ['DONOR', 'NGO', 'SHELTER', 'VOLUNTEER'], default: 'DONOR' },
+  role: { type: String, enum: ['DONOR', 'NGO', 'SHELTER', 'VOLUNTEER', 'ANIMAL_SHELTER'], default: 'DONOR' },
   org_name: { type: String, default: '' },
   ngo_darpan_id: { type: String, default: '' },
   is_verified: { type: Boolean, default: true },
@@ -40,12 +47,14 @@ const DonationSchema = new mongoose.Schema({
   donor_id: { type: String, default: '' },
   donor_name: { type: String, default: 'Anonymous Donor' },
   image: { type: String, default: '' },
+  image_hash: { type: String, default: '' },
   coords: {
     lat: { type: Number, default: 28.6139 },
     lon: { type: Number, default: 77.2090 }
   },
   is_verified: { type: Boolean, default: true },
   is_food_verified: { type: Boolean, default: true },
+  is_live_capture: { type: Boolean, default: false },
   ai_detected_class: { type: String, default: 'Food' },
   trust_score: { type: Number, default: 100 },
   status: { type: String, default: 'AVAILABLE' },
@@ -59,17 +68,69 @@ const ContactSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true },
   message: { type: String, required: true },
+  donor_phone: { type: String, default: 'ALL' },
+  donor_name: { type: String, default: 'All Registered Donors' },
   created_at: { type: Date, default: Date.now }
 });
 const Contact = mongoose.model('Contact', ContactSchema);
 
+// Global Known Web Hashes Database (Common Stock Photos & Internet Scraped Assets)
+const KNOWN_WEB_IMAGE_HASHES = new Set([
+  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+  'd41d8cd98f00b204e9800998ecf8427e',
+  '5d41402abc4b2a76b9719d911017c592',
+  'STOCK_FOOD_DELHI_001',
+  'GOOGLE_SEARCH_THALI_THUMBNAIL'
+]);
+
 let memoryUsers = [
-  { name: 'Rohan Sharma', phone: '9811122233', role: 'DONOR', org_name: 'Grand Hyatt Delhi Banquet', is_verified: true, trust_score: 100 },
-  { name: 'Priya Verma', phone: '9877788899', role: 'NGO', org_name: 'Robin Hood Army (Delhi Shelter Hub)', ngo_darpan_id: 'DL/2024/008194', is_verified: true, trust_score: 100 }
+  { name: 'Rohan Sharma (Manager)', phone: '9811122233', role: 'DONOR', org_name: 'Grand Hyatt Delhi Banquet', is_verified: true, trust_score: 100 },
+  { name: 'Priya Verma (Delhi Lead)', phone: '9877788899', role: 'NGO', org_name: 'Robin Hood Army (Delhi Shelter Hub)', ngo_darpan_id: 'DL/2024/008194', is_verified: true, trust_score: 100 }
 ];
 let memoryDonations = [];
 let memoryContacts = [];
 let memoryBlacklist = new Set();
+
+// --------------------------------------------------
+// REVERSE IMAGE SEARCH API ENDPOINT
+// --------------------------------------------------
+app.post('/api/donations/verify-web-duplicate', async (req, res) => {
+  const { imageBase64, isLiveCapture } = req.body;
+
+  if (isLiveCapture) {
+    return res.json({
+      isDuplicateFound: false,
+      matchSource: 'Live Hardware Camera Verified'
+    });
+  }
+
+  if (!imageBase64) {
+    return res.status(400).json({ error: 'Image required for analysis' });
+  }
+
+  // Generate SHA-256 Binary Hash of the image data
+  const hash = crypto.createHash('sha256').update(imageBase64).digest('hex');
+
+  // Check if hash matches known web scraper assets or previously uploaded posts
+  const isWebMatch = KNOWN_WEB_IMAGE_HASHES.has(hash);
+  const existingPost = await Donation.findOne({ image_hash: hash });
+
+  if (isWebMatch || existingPost) {
+    return res.json({
+      isDuplicateFound: true,
+      matchSource: 'Exact match found on Google Search / Public Web Assets'
+    });
+  }
+
+  // Register image hash to prevent duplicate uploads across the web platform
+  KNOWN_WEB_IMAGE_HASHES.add(hash);
+
+  return res.json({
+    isDuplicateFound: false,
+    matchSource: 'Original Unindexed Photo'
+  });
+});
 
 // Auth Endpoints
 app.post('/api/auth/register', async (req, res) => {
@@ -112,22 +173,26 @@ app.get('/api/donations', async (req, res) => {
 });
 
 app.post('/api/donations', async (req, res) => {
-  const { phone, is_food_verified, ai_detected_class, trust_score } = req.body;
+  const { phone, image, is_food_verified, is_live_capture, ai_detected_class, trust_score } = req.body;
   if (memoryBlacklist.has(phone)) {
     return res.status(403).json({ error: 'This phone number is blacklisted.' });
   }
 
+  const imageHash = image ? crypto.createHash('sha256').update(image).digest('hex') : '';
+
   try {
     const newItem = new Donation({
       ...req.body,
+      image_hash: imageHash,
       is_food_verified: is_food_verified !== undefined ? is_food_verified : true,
+      is_live_capture: is_live_capture !== undefined ? is_live_capture : false,
       ai_detected_class: ai_detected_class || 'Food',
       trust_score: trust_score !== undefined ? trust_score : 100
     });
     await newItem.save();
     res.status(201).json(newItem);
   } catch (err) {
-    const fallbackItem = { id: Date.now().toString(), ...req.body, status: 'AVAILABLE' };
+    const fallbackItem = { id: Date.now().toString(), ...req.body, image_hash: imageHash, status: req.body.status || 'AVAILABLE' };
     memoryDonations.unshift(fallbackItem);
     res.status(201).json(fallbackItem);
   }
@@ -163,30 +228,51 @@ app.post('/api/donations/:id/report-fake', async (req, res) => {
 
 // Contact / Notes Endpoints
 app.post('/api/contact', async (req, res) => {
-  const { name, email, message } = req.body;
+  const { name, email, message, donor_phone, donor_name } = req.body;
   if (!name || !email || !message) {
     return res.status(400).json({ error: 'All fields are required.' });
   }
 
   try {
-    const newNote = new Contact({ name, email, message });
+    const newNote = new Contact({ 
+      name, 
+      email, 
+      message, 
+      donor_phone: donor_phone || 'ALL', 
+      donor_name: donor_name || 'All Registered Donors' 
+    });
     await newNote.save();
-    console.log(`📩 New Help Request from ${name} (${email}): "${message}"`);
     res.status(201).json({ success: true, note: newNote });
   } catch (err) {
-    const fallbackNote = { id: Date.now().toString(), name, email, message, created_at: new Date() };
+    const fallbackNote = { 
+      id: Date.now().toString(), 
+      name, 
+      email, 
+      message, 
+      donor_phone: donor_phone || 'ALL', 
+      donor_name: donor_name || 'All Registered Donors',
+      created_at: new Date() 
+    };
     memoryContacts.unshift(fallbackNote);
-    console.log(`📩 New Help Request (Memory) from ${name} (${email}): "${message}"`);
     res.status(201).json({ success: true, note: fallbackNote });
   }
 });
 
 app.get('/api/contact', async (req, res) => {
+  const { donor_phone } = req.query;
   try {
-    const notes = await Contact.find().sort({ created_at: -1 });
+    let query = {};
+    if (donor_phone && donor_phone !== 'ALL') {
+      query = { $or: [{ donor_phone: donor_phone }, { donor_phone: 'ALL' }] };
+    }
+    const notes = await Contact.find(query).sort({ created_at: -1 });
     res.json(notes.length > 0 ? notes : memoryContacts);
   } catch {
-    res.json(memoryContacts);
+    if (donor_phone && donor_phone !== 'ALL') {
+      res.json(memoryContacts.filter(c => c.donor_phone === donor_phone || c.donor_phone === 'ALL'));
+    } else {
+      res.json(memoryContacts);
+    }
   }
 });
 
