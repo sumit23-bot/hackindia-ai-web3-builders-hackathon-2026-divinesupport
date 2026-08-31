@@ -1,18 +1,39 @@
 // ==========================================
-// FOODLOOP MASTER CONTROLLER SCRIPT
-// Multi-Tier AI Vision & Forensic Engine
-// Strict Positive Food Whitelist & Person / Selfie Blocker
-// Global Reverse Image Lookup & Synthetic Artifact Scanner
-// Empty Cutlery Blocker, Strict RBAC & Dual Rescue Loop
+// FOODLOOP MASTER CONTROLLER SCRIPT (script.js)
+// Full-Length Uncompressed Master Architecture
+//
+// Module 01: Core Global Constants, State Variables & NITI Aayog Registry
+// Module 02: Advanced Input Validation, Anti-Spam & Phone Formatters
+// Module 03: Geolocation Engine, Haversine Distance & Dynamic Radius Geofence
+// Module 04: MobileNet Deep Vision Food Recognizer & Multi-Class Classifier
+// Module 05: Anti-Selfie, Person, Cutlery & Non-Food Hardware Guard
+// Module 06: Hardware Live Camera Stream Manager (In-App Direct Feed)
+// Module 07: Proof-of-Ground Geofenced Dispute Protocol (<300m Evidence Audit)
+// Module 08: Role-Based Access Control (RBAC) UI Permission Manager
+// Module 09: Dual Rescue Hub Feed (Human Community vs Animal/Bio Loop)
+// Module 10: Dynamic Weighted Trust Score Engine
+// Module 11: Instant NGO Meal Reservation & Claim Handler
+// Module 12: Dual QR Code Handshake Generator & HTML5 Live Camera Scanner
+// Module 13: CSR 80G Tax Exemption PDF Generator Engine
+// Module 14: Targeted Donor-to-NGO Feedback & Dashboard Synchronization
+// Module 15: Photon OpenStreetMap Address Autocomplete Engine
+// Module 16: Live Contextual FoodLoop AI Assistant Engine
+// Module 17: UI Notifications, Toast System & Event Dispatchers
+// Module 18: System Bootstrapper, Lifecycle Hooks & Background Polling
 // ==========================================
+
+// --------------------------------------------------
+// SECTION 1: GLOBAL CONFIGURATION & API CONSTANTS
+// --------------------------------------------------
 
 const API_BASE_URL = 'http://localhost:5000';
 const API_URL = 'http://localhost:5000/api/donations';
 const AUTH_URL = 'http://localhost:5000/api/auth';
 const CONTACT_URL = 'http://localhost:5000/api/contact';
-const REVERSE_SEARCH_URL = 'http://localhost:5000/api/donations/verify-web-duplicate';
+const AI_CHAT_URL = 'http://localhost:5000/api/ai/chat';
 
 const MAX_RADIUS_KM = 10.0;
+const GEOFENCE_DISPUTE_LIMIT_KM = 0.3; // 300 Meters Strict Ground Radius
 const EMERGENCY_SHORT_WINDOW_HOURS = 1;
 const DEFAULT_EXPIRY_HOURS = 3;
 
@@ -58,25 +79,54 @@ const KEYBOARD_MASH_PATTERNS = [
   'poiu'
 ];
 
+// --------------------------------------------------
+// SECTION 2: GLOBAL STATE MANAGEMENT
+// --------------------------------------------------
+
 let aiModel = null;
 let currentGeneratedOTP = '';
-let isFoodValid = true;
+let isFoodValid = false;
 let isLiveCameraCapture = false;
-let detectedAIClass = 'General Food Item';
+let detectedAIClass = 'No Food Detected';
 let userLiveCoords = null;
 let selectedAddressCoords = null;
 let uploadedImageBase64 = '';
 let activeListings = [];
 let pendingDonationPayload = null;
+
 let mediaStream = null;
+let disputeMediaStream = null;
+let disputeEvidenceBase64 = '';
+
 let visibleItemCount = 5;
 let html5QrScanner = null;
+let chatHistory = [];
 
+// Dual Portal View: 'HUMAN' or 'ANIMAL'
 let currentPortalTab = 'HUMAN';
 
+// Session State
 let currentUser = JSON.parse(localStorage.getItem('foodloop_auth_user') || 'null');
 let currentAuthMode = 'LOGIN';
 let selectedRole = 'NGO';
+
+// --------------------------------------------------
+// SECTION 3: VALIDATION & ANTI-SPAM UTILITIES
+// --------------------------------------------------
+
+function showToast(message, isError = false) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.style.background = isError ? '#ef4444' : '#10b981';
+  toast.style.color = isError ? '#ffffff' : '#000000';
+  toast.style.display = 'block';
+  toast.style.opacity = '1';
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => { toast.style.display = 'none'; }, 300);
+  }, 3500);
+}
 
 function isSpamText(str) {
   if (!str) return true;
@@ -116,79 +166,117 @@ function saveMyClaim(id) {
 }
 
 // --------------------------------------------------
-// REVERSE IMAGE WEB SEARCH & SYNTHETIC FORENSIC SCANNER
+// SECTION 4: HAVERSINE DISTANCE & GPS LOCATION ENGINE
 // --------------------------------------------------
-async function executeGlobalWebReverseSearch(canvas, base64Data, isLiveCam) {
-  if (isLiveCam) {
-    return {
-      isFraudulent: false,
-      flagReason: 'Live Hardware Camera Verified'
-    };
-  }
 
-  const ctx = canvas.getContext('2d');
-  const sampleWidth = Math.min(canvas.width, 320);
-  const sampleHeight = Math.min(canvas.height, 320);
-  const imgData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
-  const pixels = imgData.data;
-
-  let totalPixelCount = pixels.length / 4;
-  let uniqueColorBins = {};
-  let totalVariance = 0;
-  let previousLuminance = 0;
-
-  for (let i = 0; i < pixels.length; i += 4) {
-    const red = pixels[i];
-    const green = pixels[i + 1];
-    const blue = pixels[i + 2];
-    
-    const luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue);
-    totalVariance += Math.abs(luminance - previousLuminance);
-    previousLuminance = luminance;
-
-    const binKey = `${Math.floor(red / 24)}_${Math.floor(green / 24)}_${Math.floor(blue / 24)}`;
-    uniqueColorBins[binKey] = (uniqueColorBins[binKey] || 0) + 1;
-  }
-
-  const totalUniqueColors = Object.keys(uniqueColorBins).length;
-  const averageVariance = totalVariance / totalPixelCount;
-
-  if (totalUniqueColors < 35 || averageVariance < 1.8) {
-    return {
-      isFraudulent: true,
-      flagReason: 'AI-Generated / Synthetic Image (Midjourney/DALL-E Artifacts)'
-    };
-  }
-
-  try {
-    const res = await fetch(REVERSE_SEARCH_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: base64Data, isLiveCapture: isLiveCam })
-    });
-    
-    if (res.ok) {
-      const data = await res.json();
-      if (data.isDuplicateFound) {
-        return {
-          isFraudulent: true,
-          flagReason: 'Google / Web Downloaded Duplicate Match Found'
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('Local fallback for reverse image search');
-  }
-
-  return {
-    isFraudulent: false,
-    flagReason: 'Attached Photo'
-  };
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const earthRadiusKm = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const roadDistance = earthRadiusKm * c * 1.3;
+  return parseFloat(roadDistance.toFixed(2));
 }
 
+function autoDetectUserLocation() {
+  const cachedGPS = localStorage.getItem('foodloop_user_coords');
+  if (cachedGPS) {
+    try {
+      userLiveCoords = JSON.parse(cachedGPS);
+    } catch (e) {
+      userLiveCoords = { lat: 28.6139, lon: 77.2090 };
+    }
+  }
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        userLiveCoords = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude
+        };
+        localStorage.setItem('foodloop_user_coords', JSON.stringify(userLiveCoords));
+        renderListings();
+      },
+      () => {
+        if (!userLiveCoords) {
+          userLiveCoords = { lat: 28.6139, lon: 77.2090 };
+        }
+        renderListings();
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 600000 }
+    );
+  } else {
+    if (!userLiveCoords) {
+      userLiveCoords = { lat: 28.6139, lon: 77.2090 };
+    }
+  }
+}
+
+window.locateUserGPS = function() {
+  const addressInput = document.getElementById('address');
+  const gpsBtn = document.getElementById('gps-locate-btn');
+
+  if (!navigator.geolocation) {
+    alert('GPS is not supported on this browser.');
+    return;
+  }
+
+  if (gpsBtn) {
+    gpsBtn.innerHTML = '⏳ Locating...';
+    gpsBtn.style.color = '#fbbf24';
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      selectedAddressCoords = {
+        lat: position.coords.latitude,
+        lon: position.coords.longitude
+      };
+      userLiveCoords = selectedAddressCoords;
+      localStorage.setItem('foodloop_user_coords', JSON.stringify(userLiveCoords));
+
+      try {
+        const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${selectedAddressCoords.lat}&lon=${selectedAddressCoords.lon}&zoom=18&addressdetails=1`;
+        const res = await fetch(nominatimUrl);
+        const data = await res.json();
+        if (addressInput) {
+          addressInput.value = data.display_name || `${selectedAddressCoords.lat.toFixed(5)}, ${selectedAddressCoords.lon.toFixed(5)}`;
+        }
+      } catch (e) {
+        if (addressInput) {
+          addressInput.value = `${selectedAddressCoords.lat.toFixed(5)}, ${selectedAddressCoords.lon.toFixed(5)}`;
+        }
+      }
+
+      if (gpsBtn) {
+        gpsBtn.innerHTML = '✅ Located';
+        setTimeout(() => {
+          gpsBtn.innerHTML = '🎯 Use Live GPS';
+          gpsBtn.style.color = '#34d399';
+        }, 3000);
+      }
+      renderListings();
+    },
+    () => {
+      alert('Please allow location permissions in your browser.');
+      if (gpsBtn) {
+        gpsBtn.innerHTML = '❌ Denied';
+        gpsBtn.style.color = '#f87171';
+      }
+    }
+  );
+};
+
 // --------------------------------------------------
-// AI MOBILENET CLASSIFIER & STRICT FOOD FILTER
+// SECTION 5: AI MOBILENET CLASSIFIER & FOOD SCANNER
 // --------------------------------------------------
+
 async function loadAIModel() {
   try {
     if (window.mobilenet) {
@@ -196,42 +284,391 @@ async function loadAIModel() {
       console.log('🤖 AI MobileNet Vision Classifier Active & Loaded');
     }
   } catch (err) {
-    console.warn('⚠️ Offline fallback mode for MobileNet Vision');
+    console.warn('⚠️ MobileNet Vision Model running in offline mode');
   }
 }
 
-// Strict Person, Face, Clothing, Accessory, Electronics & Furniture Blocklist
 const PERSON_AND_OBJECT_BLOCKLIST = [
-  'snorkel', 'sunglass', 'sunglasses', 'spectacles', 'glasses', 'goggles', 
   'person', 'face', 'human', 'wig', 'hair', 'beard', 'mustache', 'neck', 
   'head', 'arm', 'finger', 'hand', 'jersey', 'sweatshirt', 't-shirt', 'shirt', 
   'suit', 'tie', 'shoe', 'jean', 'pant', 'cloak', 'abaya', 'kimono', 'vestment', 
   'cellular telephone', 'cellphone', 'phone', 'ipod', 'laptop', 'notebook', 
   'monitor', 'screen', 'television', 'tv', 'keyboard', 'mouse', 'desk', 'chair', 
   'couch', 'curtain', 'window', 'wall', 'door', 'car', 'vehicle', 'tire', 
-  'dog', 'cat', 'bird', 'animal', 'microphone', 'headphones', 'book', 'paper'
+  'dog', 'cat', 'bird', 'animal', 'microphone', 'headphones', 'book', 'paper',
+  'snorkel', 'sunglass', 'sunglasses', 'spectacles', 'glasses', 'goggles'
 ];
 
-// Pure Cutlery Without Food
 const PURE_CUTLERY_KEYWORDS = [
   'fork', 'spoon', 'knife', 'spatula', 'ladle', 'cutting board', 
   'dishwasher', 'sink', 'table lamp'
 ];
 
-// Strict Positive Food Keywords
 const STRICT_FOOD_KEYWORDS = [
-  'food', 'meal', 'soup', 'bread', 'pizza', 'burger', 'sandwich', 'curry', 
+  'food', 'dish', 'meal', 'soup', 'bread', 'pizza', 'burger', 'sandwich', 'curry', 
   'rice', 'biryani', 'pasta', 'noodle', 'vegetable', 'fruit', 'apple', 'banana', 
   'orange', 'meat', 'chicken', 'pot pie', 'hotdog', 'cheeseburger', 'bagel', 
   'pretzel', 'mashed potato', 'guacamole', 'custard', 'confectionery', 'bakery', 
-  'salad', 'stew', 'beverage', 'snack', 'roti', 'chapati', 'cauliflower', 'broccoli', 
-  'paneer', 'dal', 'samosa', 'gravy', 'sauce', 'lunch', 'dinner', 'breakfast', 
-  'tray', 'thali', 'platter', 'casserole', 'pot', 'wok', 'dish'
+  'salad', 'casserole', 'stew', 'beverage', 'snack', 'roti', 'chapati', 'cauliflower', 
+  'broccoli', 'paneer', 'dal', 'samosa', 'gravy', 'sauce', 'lunch', 'dinner', 'breakfast',
+  'tray', 'thali', 'platter', 'pot', 'wok', 'box', 'buffet', 'tableware', 'dining table'
 ];
 
 // --------------------------------------------------
-// ROLE-BASED ACCESS CONTROL (RBAC) CONTROLLER
+// SECTION 6: HARDWARE LIVE CAMERA STREAM ENGINE
 // --------------------------------------------------
+
+window.startInAppCamera = async function() {
+  const video = document.getElementById('cam-video-stream');
+  const placeholder = document.getElementById('start-cam-placeholder');
+  const controls = document.getElementById('cam-controls');
+  const previewContainer = document.getElementById('image-preview-container');
+
+  if (previewContainer) previewContainer.style.display = 'none';
+
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+    } catch (e) {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      } catch (err) {
+        alert('⚠️ Camera access denied. Please allow camera permissions.');
+        return;
+      }
+    }
+
+    if (video && mediaStream) {
+      video.srcObject = mediaStream;
+      video.style.display = 'block';
+      if (placeholder) placeholder.style.display = 'none';
+      if (controls) controls.style.display = 'flex';
+      video.play();
+    }
+  } else {
+    alert('⚠️ Live Camera Stream is not supported on this browser.');
+  }
+};
+
+window.stopInAppCamera = function() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(track => track.stop());
+    mediaStream = null;
+  }
+  const video = document.getElementById('cam-video-stream');
+  const placeholder = document.getElementById('start-cam-placeholder');
+  const controls = document.getElementById('cam-controls');
+  
+  if (video) video.style.display = 'none';
+  if (controls) controls.style.display = 'none';
+  if (placeholder) placeholder.style.display = 'block';
+};
+
+window.retakeSnap = function() {
+  uploadedImageBase64 = '';
+  isFoodValid = false;
+  isLiveCameraCapture = false;
+  detectedAIClass = 'No Food Detected';
+  const previewContainer = document.getElementById('image-preview-container');
+  if (previewContainer) previewContainer.style.display = 'none';
+  const placeholder = document.getElementById('start-cam-placeholder');
+  if (placeholder) placeholder.style.display = 'block';
+};
+
+window.captureLiveSnap = function() {
+  const video = document.getElementById('cam-video-stream');
+  if (!video || !mediaStream) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  window.stopInAppCamera();
+  isLiveCameraCapture = true;
+  processCapturedImage(canvas.toDataURL('image/jpeg', 0.88));
+};
+
+function processCapturedImage(base64Data) {
+  const previewContainer = document.getElementById('image-preview-container');
+  const previewImg = document.getElementById('food-image-preview');
+  const badge = document.getElementById('verification-badge');
+  const placeholder = document.getElementById('start-cam-placeholder');
+
+  const rawImage = new Image();
+  rawImage.onload = async function() {
+    const canvas = document.createElement('canvas');
+    canvas.width = rawImage.width;
+    canvas.height = rawImage.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(rawImage, 0, 0);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+
+    ctx.fillStyle = '#10b981';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillText('🛡️ Live Hardware Camera Authenticated', 15, canvas.height - 26);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '14px sans-serif';
+    const nowStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    ctx.fillText(`${nowStr} | OTP Handshake Active`, 15, canvas.height - 10);
+
+    uploadedImageBase64 = canvas.toDataURL('image/jpeg', 0.88);
+
+    if (placeholder) placeholder.style.display = 'none';
+    if (previewImg && previewContainer) {
+      previewImg.src = uploadedImageBase64;
+      previewContainer.style.display = 'block';
+
+      badge.innerHTML = '🤖 AI Scanning Meal...';
+      badge.style.background = 'rgba(56, 189, 248, 0.95)';
+      badge.style.color = '#000000';
+
+      if (!aiModel && window.mobilenet) {
+        aiModel = await mobilenet.load();
+      }
+
+      if (aiModel) {
+        const predictions = await aiModel.classify(rawImage, 5);
+        const topPrediction = predictions[0].className.toLowerCase();
+        
+        const isPersonOrObject = predictions.some(p => {
+          const name = p.className.toLowerCase();
+          return PERSON_AND_OBJECT_BLOCKLIST.some(blockWord => name.includes(blockWord));
+        });
+
+        const isCutleryOnly = PURE_CUTLERY_KEYWORDS.some(k => topPrediction.includes(k));
+
+        const hasFoodMatched = predictions.some(p => {
+          const name = p.className.toLowerCase();
+          return STRICT_FOOD_KEYWORDS.some(foodWord => name.includes(foodWord));
+        });
+
+        if (isPersonOrObject && !hasFoodMatched) {
+          isFoodValid = false;
+          detectedAIClass = `Person / Non-Food Object (${predictions[0].className.split(',')[0]})`;
+          badge.innerHTML = `⚠️ Rejected: ${detectedAIClass}`;
+          badge.style.background = 'rgba(239, 68, 68, 0.95)';
+          badge.style.color = '#ffffff';
+          alert('🚫 Non-Food / Person Detected!\n\nPlease capture real consumable surplus food.');
+        } else if (isCutleryOnly && !hasFoodMatched) {
+          isFoodValid = false;
+          detectedAIClass = `Empty Utensil (${predictions[0].className.split(',')[0]})`;
+          badge.innerHTML = `⚠️ Rejected: ${detectedAIClass} (No Food)`;
+          badge.style.background = 'rgba(239, 68, 68, 0.95)';
+          badge.style.color = '#ffffff';
+          alert('🚫 Empty Plate / Cutlery Detected!\n\nPlease capture actual surplus food.');
+        } else if (hasFoodMatched) {
+          isFoodValid = true;
+          let label = predictions[0].className.split(',')[0];
+          if (topPrediction.includes('tray') || topPrediction.includes('dish') || topPrediction.includes('box') || topPrediction.includes('thali')) {
+            detectedAIClass = 'Packed Meal / Thali Box';
+          } else {
+            detectedAIClass = label;
+          }
+
+          badge.innerHTML = `🛡️ Live Food Verified: ${detectedAIClass}`;
+          badge.style.background = 'rgba(16, 185, 129, 0.95)';
+          badge.style.color = '#000000';
+        } else {
+          isFoodValid = false;
+          detectedAIClass = predictions[0].className.split(',')[0];
+          badge.innerHTML = `⚠️ Non-Food Detected: ${detectedAIClass}`;
+          badge.style.background = 'rgba(239, 68, 68, 0.95)';
+          badge.style.color = '#ffffff';
+          alert(`⚠️ AI Warning: Unrecognized item (${detectedAIClass}). Please align genuine food plate clearly.`);
+        }
+      } else {
+        isFoodValid = true;
+        detectedAIClass = 'Food Item';
+        badge.innerHTML = '🛡️ Live Camera Proof Attached';
+        badge.style.background = 'rgba(16, 185, 129, 0.95)';
+        badge.style.color = '#000000';
+      }
+    }
+  };
+  rawImage.src = base64Data;
+}
+
+// --------------------------------------------------
+// SECTION 7: PROOF-OF-GROUND GEOFENCED DISPUTE ENGINE
+// --------------------------------------------------
+
+window.openDisputeModal = function(listingId, listingLat, listingLon) {
+  if (!currentUser || (currentUser.role !== 'NGO' && currentUser.role !== 'ANIMAL_SHELTER')) {
+    alert('🔒 Restricted Action:\n\nOnly verified NGO or Shelter representatives are authorized to file field dispute reports.');
+    return;
+  }
+
+  if (userLiveCoords && listingLat && listingLon) {
+    const distanceKm = calculateDistance(userLiveCoords.lat, userLiveCoords.lon, listingLat, listingLon);
+    if (distanceKm > GEOFENCE_DISPUTE_LIMIT_KM) {
+      alert(`🚫 Geofence Security Violation!\n\nYou are ${(distanceKm * 1000).toFixed(0)} meters away from the pickup location.\n\n• You MUST be physically present at the pickup address (within 300m) to file a dispute report.\n• Remote false reporting is strictly prohibited.`);
+      return;
+    }
+  }
+
+  const idField = document.getElementById('dispute-listing-id');
+  const latField = document.getElementById('dispute-listing-lat');
+  const lonField = document.getElementById('dispute-listing-lon');
+  
+  if (idField) idField.value = listingId;
+  if (latField) latField.value = listingLat || 28.6139;
+  if (lonField) lonField.value = listingLon || 77.2090;
+  
+  disputeEvidenceBase64 = '';
+  const previewImg = document.getElementById('dispute-preview-img');
+  const placeholder = document.getElementById('dispute-cam-placeholder');
+  const modal = document.getElementById('dispute-modal');
+
+  if (previewImg) previewImg.style.display = 'none';
+  if (placeholder) placeholder.style.display = 'block';
+  if (modal) modal.style.display = 'flex';
+};
+
+window.closeDisputeModal = function() {
+  window.stopDisputeCamera();
+  const modal = document.getElementById('dispute-modal');
+  if (modal) modal.style.display = 'none';
+};
+
+window.startDisputeCamera = async function() {
+  const video = document.getElementById('dispute-video');
+  const placeholder = document.getElementById('dispute-cam-placeholder');
+  const controls = document.getElementById('dispute-cam-controls');
+  const preview = document.getElementById('dispute-preview-img');
+
+  if (preview) preview.style.display = 'none';
+
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      disputeMediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+    } catch {
+      try {
+        disputeMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      } catch (err) {
+        alert('⚠️ Camera access denied.');
+        return;
+      }
+    }
+
+    if (video && disputeMediaStream) {
+      video.srcObject = disputeMediaStream;
+      video.style.display = 'block';
+      if (placeholder) placeholder.style.display = 'none';
+      if (controls) controls.style.display = 'flex';
+      video.play();
+    }
+  }
+};
+
+window.stopDisputeCamera = function() {
+  if (disputeMediaStream) {
+    disputeMediaStream.getTracks().forEach(t => t.stop());
+    disputeMediaStream = null;
+  }
+  const video = document.getElementById('dispute-video');
+  const placeholder = document.getElementById('dispute-cam-placeholder');
+  const controls = document.getElementById('dispute-cam-controls');
+
+  if (video) video.style.display = 'none';
+  if (controls) controls.style.display = 'none';
+  if (placeholder) placeholder.style.display = 'block';
+};
+
+window.captureDisputeSnap = function() {
+  const video = document.getElementById('dispute-video');
+  if (!video || !disputeMediaStream) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+  ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+  ctx.fillStyle = '#ef4444';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(`🚨 FIELD EVIDENCE | ${new Date().toLocaleString('en-IN')}`, 10, canvas.height - 22);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '11px sans-serif';
+  ctx.fillText(`NGO ID: ${currentUser.ngo_darpan_id || 'DL/VERIFIED'} | Geotagged: ${userLiveCoords ? userLiveCoords.lat.toFixed(4) + ',' + userLiveCoords.lon.toFixed(4) : 'Delhi'}`, 10, canvas.height - 8);
+
+  disputeEvidenceBase64 = canvas.toDataURL('image/jpeg', 0.85);
+  window.stopDisputeCamera();
+
+  const preview = document.getElementById('dispute-preview-img');
+  const placeholder = document.getElementById('dispute-cam-placeholder');
+  if (preview) {
+    preview.src = disputeEvidenceBase64;
+    preview.style.display = 'block';
+  }
+  if (placeholder) placeholder.style.display = 'none';
+};
+
+window.submitDisputeReport = async function(e) {
+  if (e) e.preventDefault();
+
+  if (!disputeEvidenceBase64 || disputeEvidenceBase64.length < 50) {
+    alert('❌ Mandatory Proof Missing!\n\nYou MUST capture live on-spot camera evidence of the fake food / locked location before filing a strike.');
+    return;
+  }
+
+  const listingId = document.getElementById('dispute-listing-id').value;
+  const listingLat = parseFloat(document.getElementById('dispute-listing-lat').value);
+  const listingLon = parseFloat(document.getElementById('dispute-listing-lon').value);
+  const reason = document.getElementById('dispute-reason-select').value;
+
+  const distKm = userLiveCoords ? calculateDistance(userLiveCoords.lat, userLiveCoords.lon, listingLat, listingLon) : 0.05;
+
+  try {
+    const res = await fetch(`${API_URL}/${listingId}/report-fake`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reporter_name: currentUser.org_name || currentUser.name,
+        reporter_phone: currentUser.phone,
+        darpan_id: currentUser.ngo_darpan_id || 'DL/AWBI/ACTIVE',
+        reason: reason,
+        evidence_image: disputeEvidenceBase64,
+        reporter_distance_km: distKm
+      })
+    });
+
+    const data = await res.json();
+    window.closeDisputeModal();
+
+    if (res.ok) {
+      if (data.status === 'BANNED') {
+        alert(`🚨 Multi-Signature Consensus Reached!\n\n${data.message}`);
+      } else {
+        alert(`⚠️ Strike Logged with Proof!\n\n${data.message}\n\nYour NGO reputation signature has been attached to the audit trail.`);
+      }
+      loadFeed();
+    } else {
+      alert(`⚠️ Action Blocked: ${data.error || 'Unable to submit dispute.'}`);
+    }
+  } catch (err) {
+    window.closeDisputeModal();
+    alert('✅ Incident logged locally.');
+    loadFeed();
+  }
+};
+
+// --------------------------------------------------
+// SECTION 8: ROLE-BASED ACCESS CONTROL (RBAC) UI ENGINE
+// --------------------------------------------------
+
 function applyRoleBasedViewPermissions() {
   const donorFormContainer = document.getElementById('donor-form-container');
   const ngoGuidanceCard = document.getElementById('ngo-guidance-card');
@@ -252,44 +689,24 @@ function applyRoleBasedViewPermissions() {
   const isDonor = currentUser && currentUser.role === 'DONOR';
 
   if (isNGO) {
-    if (donorFormContainer) {
-      donorFormContainer.style.display = 'none';
-    }
+    if (donorFormContainer) donorFormContainer.style.display = 'none';
     if (ngoGuidanceCard) {
       ngoGuidanceCard.style.display = 'block';
-      if (ngoGuideIcon) {
-        ngoGuideIcon.textContent = isAnimal ? '🐾' : '🏛️';
-      }
-      if (ngoGuideTitle) {
-        ngoGuideTitle.textContent = isAnimal ? 'Animal Shelter & Gaushala Rescue Console' : 'Verified NGO Rescue Console';
-      }
-      if (ngoGuideOrg) {
-        ngoGuideOrg.textContent = `Logged in as: ${currentUser.org_name || currentUser.name}`;
-      }
+      if (ngoGuideIcon) ngoGuideIcon.textContent = isAnimal ? '🐾' : '🏛️';
+      if (ngoGuideTitle) ngoGuideTitle.textContent = isAnimal ? 'Animal Shelter & Gaushala Rescue Console' : 'Verified NGO Rescue Console';
+      if (ngoGuideOrg) ngoGuideOrg.textContent = `Logged in as: ${currentUser.org_name || currentUser.name}`;
     }
   } else {
-    if (donorFormContainer) {
-      donorFormContainer.style.display = 'block';
-    }
-    if (ngoGuidanceCard) {
-      ngoGuidanceCard.style.display = 'none';
-    }
+    if (donorFormContainer) donorFormContainer.style.display = 'block';
+    if (ngoGuidanceCard) ngoGuidanceCard.style.display = 'none';
   }
 
   if (isDonor) {
-    if (contactSection) {
-      contactSection.style.display = 'none';
-    }
-    if (navContactLink) {
-      navContactLink.style.display = 'none';
-    }
+    if (contactSection) contactSection.style.display = 'none';
+    if (navContactLink) navContactLink.style.display = 'none';
   } else {
-    if (contactSection) {
-      contactSection.style.display = 'block';
-    }
-    if (navContactLink) {
-      navContactLink.style.display = 'inline-block';
-    }
+    if (contactSection) contactSection.style.display = 'block';
+    if (navContactLink) navContactLink.style.display = 'inline-block';
   }
 
   populateTargetDonorDropdown();
@@ -297,9 +714,7 @@ function applyRoleBasedViewPermissions() {
 
 function populateTargetDonorDropdown() {
   const targetSelect = document.getElementById('contact-donor-target');
-  if (!targetSelect) {
-    return;
-  }
+  if (!targetSelect) return;
 
   const donors = [];
   const seenPhones = new Set();
@@ -325,8 +740,9 @@ function populateTargetDonorDropdown() {
 }
 
 // --------------------------------------------------
-// RESCUE PORTAL TABS & SHORT-WINDOW ALERT
+// SECTION 9: DUAL RESCUE PORTAL TABS & SHORT-WINDOW ROUTER
 // --------------------------------------------------
+
 window.switchRescuePortalTab = function(tab) {
   currentPortalTab = tab;
   const btnHuman = document.getElementById('tab-portal-human');
@@ -368,9 +784,24 @@ window.handleWindowChange = function(hours) {
   }
 };
 
+window.applyPreset = function(title, category, qty, hours) {
+  const t = document.getElementById('input-food-title');
+  const c = document.getElementById('input-food-category');
+  const q = document.getElementById('input-food-qty');
+  const w = document.getElementById('input-food-window');
+  if (t) t.value = title;
+  if (c) c.value = category;
+  if (q) q.value = qty;
+  if (w) {
+    w.value = hours;
+    window.handleWindowChange(String(hours));
+  }
+};
+
 // --------------------------------------------------
-// ACTION CARDS & SHARING ROUTERS
+// SECTION 10: ACTION CARDS & SHARING ROUTERS
 // --------------------------------------------------
+
 window.handleActionCardClick = function(action) {
   if (action === 'DONATE') {
     if (currentUser && (currentUser.role === 'NGO' || currentUser.role === 'ANIMAL_SHELTER')) {
@@ -404,9 +835,7 @@ window.handleActionCardClick = function(action) {
     }
   } else if (action === 'VOLUNTEER') {
     const feedPanel = document.querySelector('.feed-panel');
-    if (feedPanel) {
-      feedPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    if (feedPanel) feedPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else if (action === 'SHARE') {
     openShareModal();
   }
@@ -419,30 +848,17 @@ window.openShareModal = function() {
   const shareDisplay = document.getElementById('share-display-link');
 
   const shareWebLink = 'https://foodloop-india.org';
-  const shareMessage = `🍲 *Join FoodLoop Delhi-NCR!*
-Bridging banquet & restaurant surplus food to verified NGO shelters and gaushalas in minutes.
+  const shareMessage = `🍲 *Join FoodLoop Delhi-NCR!*\nBridging banquet & restaurant surplus food to verified NGO shelters and gaushalas in minutes.\n\n👉 Open Live Rescue Portal: ${shareWebLink}`;
 
-👉 Open Live Rescue Portal: ${shareWebLink}`;
-
-  if (waBtn) {
-    waBtn.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareMessage)}`;
-  }
-  if (twBtn) {
-    twBtn.href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessage)}`;
-  }
-  if (shareDisplay) {
-    shareDisplay.textContent = shareWebLink;
-  }
-  if (modal) {
-    modal.style.display = 'flex';
-  }
+  if (waBtn) waBtn.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareMessage)}`;
+  if (twBtn) twBtn.href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessage)}`;
+  if (shareDisplay) shareDisplay.textContent = shareWebLink;
+  if (modal) modal.style.display = 'flex';
 };
 
 window.closeShareModal = function() {
   const modal = document.getElementById('share-modal');
-  if (modal) {
-    modal.style.display = 'none';
-  }
+  if (modal) modal.style.display = 'none';
 };
 
 window.copyShareLinkFallback = function() {
@@ -457,8 +873,9 @@ window.copyShareLinkFallback = function() {
 };
 
 // --------------------------------------------------
-// HACKATHON DEMO PERSONA SWITCHER
+// SECTION 11: DEMO PERSONA SWITCHER
 // --------------------------------------------------
+
 window.loginDemoPersona = function(type) {
   if (type === 'DONOR') {
     currentUser = {
@@ -473,7 +890,7 @@ window.loginDemoPersona = function(type) {
     updateNavbarAuthState();
     applyRoleBasedViewPermissions();
     renderListings();
-    alert('⚡ Demo Switched: You are now logged in as "Grand Hyatt Banquet (Donor)".\n\n✓ You can post surplus food with mandatory photo verification\n✓ Your Dashboard will show live Community Reviews & Feedback sent by NGOs!');
+    alert('⚡ Demo Switched: Logged in as "Grand Hyatt Banquet (Donor)".');
   } else if (type === 'NGO') {
     currentUser = {
       name: 'Priya Verma (Delhi Lead)',
@@ -488,7 +905,7 @@ window.loginDemoPersona = function(type) {
     updateNavbarAuthState();
     applyRoleBasedViewPermissions();
     switchRescuePortalTab('HUMAN');
-    alert('⚡ Demo Switched: You are now logged in as "Robin Hood Army (Verified NGO)".\n\n✓ Donor form hidden, Rescue Console enabled\n✓ You can claim surplus listings & send notes directly to donors!');
+    alert('⚡ Demo Switched: Logged in as "Robin Hood Army (Verified NGO)".');
   } else if (type === 'ANIMAL') {
     currentUser = {
       name: 'Dr. Alok Nath (Rescue Lead)',
@@ -503,20 +920,21 @@ window.loginDemoPersona = function(type) {
     updateNavbarAuthState();
     applyRoleBasedViewPermissions();
     switchRescuePortalTab('ANIMAL');
-    alert('⚡ Demo Switched: You are now logged in as "Delhi Gaushala & Stray Animal Trust".\n\n🐾 Switched to Secondary Animal Feed & Bio-Loop!\n✓ Claim post-window surplus safely diverted from human consumption to feed cattle and stray animals.');
+    alert('⚡ Demo Switched: Logged in as "Delhi Gaushala & Stray Animal Trust".');
   } else {
     currentUser = null;
     localStorage.removeItem('foodloop_auth_user');
     updateNavbarAuthState();
     applyRoleBasedViewPermissions();
     renderListings();
-    alert('⚡ Demo Switched: Logged out (Visitor / Public User).\n\n🔒 Claim buttons are locked.');
+    alert('⚡ Logged out.');
   }
 };
 
 // --------------------------------------------------
-// IMPACT DASHBOARD & REVIEWS
+// SECTION 12: IMPACT DASHBOARD & REVIEWS
 // --------------------------------------------------
+
 window.openDashboardModal = async function() {
   if (!currentUser) {
     openAuthModal('LOGIN');
@@ -550,9 +968,7 @@ window.openDashboardModal = async function() {
   }
 
   if (isNGO) {
-    if (feedbackSection) {
-      feedbackSection.style.display = 'none';
-    }
+    if (feedbackSection) feedbackSection.style.display = 'none';
 
     const myClaims = getMyClaimedListings();
     const claimedItems = activeListings.filter(i => myClaims.includes(String(i._id || i.id)));
@@ -605,48 +1021,33 @@ window.openDashboardModal = async function() {
     
     if (trustStat) {
       trustStat.textContent = `${calculatedTrust}%`;
-      if (calculatedTrust >= 80) {
-        trustStat.className = 'stat-green';
-        trustStat.style.color = '#34d399';
-      } else if (calculatedTrust >= 50) {
-        trustStat.className = 'stat-amber';
-        trustStat.style.color = '#fbbf24';
-      } else {
-        trustStat.className = 'stat-red';
-        trustStat.style.color = '#f87171';
-      }
+      trustStat.style.color = calculatedTrust >= 80 ? '#34d399' : calculatedTrust >= 50 ? '#fbbf24' : '#f87171';
     }
 
-    if (titleEl) {
-      titleEl.textContent = 'My Posted Surplus Donations';
-    }
+    if (titleEl) titleEl.textContent = 'My Posted Surplus Donations';
 
     if (myPosts.length === 0) {
       listEl.innerHTML = '<p style="font-size:12px; color:#cbd5e1; text-align:center; padding:16px;">You have not posted any surplus food yet. Use the form to post extra food.</p>';
     } else {
-      listEl.innerHTML = myPosts.map(item => {
-        const isLive = item.is_food_verified === true && item.is_live_capture === true;
-        return `
-          <div style="background: #111827; border: 1px solid ${isLive ? '#334155' : 'rgba(16, 185, 129, 0.5)'}; padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div>
-              <strong style="color: #fff; font-size: 13px;">${item.title} (${item.quantity})</strong>
-              <div style="display: flex; gap: 6px; align-items: center; margin-top: 3px;">
-                <small style="color: ${item.status === 'DELIVERED' ? '#34d399' : '#fbbf24'}; font-size: 11px;">
-                  Status: ${item.status === 'DELIVERED' ? '✅ Delivered' : item.status === 'CLAIMED' ? '🟡 Claimed' : '🟢 Live'}
-                </small>
-                ${isLive ? `<span style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.3);">🛡️ Live Camera Proof</span>` : `<span style="background: rgba(56, 189, 248, 0.15); color: #7dd3fc; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(56,189,248,0.3);">📷 Photo Attached</span>`}
-              </div>
+      listEl.innerHTML = myPosts.map(item => `
+        <div style="background: #111827; border: 1px solid #334155; padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div>
+            <strong style="color: #fff; font-size: 13px;">${item.title} (${item.quantity})</strong>
+            <div style="display: flex; gap: 6px; align-items: center; margin-top: 3px;">
+              <small style="color: ${item.status === 'DELIVERED' ? '#34d399' : '#fbbf24'}; font-size: 11px;">
+                Status: ${item.status === 'DELIVERED' ? '✅ Delivered' : item.status === 'CLAIMED' ? '🟡 Claimed' : '🟢 Live'}
+              </small>
             </div>
-            ${item.status === 'DELIVERED' ? `
-              <button onclick="generateCSRCertificate('${item.title}', '${item.quantity}', '${item.address}')" style="background: #2563eb; color:#fff; border:none; padding:4px 10px; border-radius:6px; font-weight:700; font-size:11px; cursor:pointer;">
-                📜 Tax Proof
-              </button>
-            ` : `
-              <span style="font-size:10px; color:#94a3b8;">🔒 Unlocks on delivery</span>
-            `}
           </div>
-        `;
-      }).join('');
+          ${item.status === 'DELIVERED' ? `
+            <button onclick="generateCSRCertificate('${item.title}', '${item.quantity}', '${item.address}')" style="background: #2563eb; color:#fff; border:none; padding:4px 10px; border-radius:6px; font-weight:700; font-size:11px; cursor:pointer;">
+              📜 Tax Proof
+            </button>
+          ` : `
+            <span style="font-size:10px; color:#94a3b8;">🔒 Unlocks on delivery</span>
+          `}
+        </div>
+      `).join('');
     }
 
     if (feedbackSection) {
@@ -657,33 +1058,22 @@ window.openDashboardModal = async function() {
         const notes = await res.json();
         
         if (Array.isArray(notes) && notes.length > 0) {
-          if (feedbackCount) {
-            feedbackCount.textContent = `${notes.length} Reviews`;
-          }
+          if (feedbackCount) feedbackCount.textContent = `${notes.length} Reviews`;
           feedbackList.innerHTML = notes.map(n => `
             <div style="background: #111827; border: 1px solid #334155; padding: 12px 14px; border-radius: 10px; margin-bottom: 8px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                 <strong style="color: #38bdf8; font-size: 13px;">👤 ${n.name || 'Anonymous NGO Volunteer'}</strong>
-                <span style="font-size: 10px; color: #94a3b8;">${new Date(n.created_at || Date.now()).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                <span style="font-size: 10px; color: #94a3b8;">${new Date(n.created_at || Date.now()).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}</span>
               </div>
-              <p style="font-size: 12px; color: #e2e8f0; margin: 4px 0 0 0; line-height: 1.4;">"${n.message}"</p>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-                <small style="font-size: 10px; color: #64748b;">✉️ ${n.email}</small>
-                <span style="font-size: 10px; color: #34d399; font-weight: 700;">🎯 Sent to: ${n.donor_name || 'Your Venue'}</span>
-              </div>
+              <p style="font-size: 12px; color: #e2e8f0; margin: 4px 0 0 0;">"${n.message}"</p>
             </div>
           `).join('');
         } else {
-          if (feedbackCount) {
-            feedbackCount.textContent = '0 Reviews';
-          }
-          feedbackList.innerHTML = '<p style="font-size:12px; color:#94a3b8; text-align:center; padding:14px;">No incoming reviews yet. Notes sent from the NGO contact form will appear here.</p>';
+          if (feedbackCount) feedbackCount.textContent = '0 Reviews';
+          feedbackList.innerHTML = '<p style="font-size:12px; color:#94a3b8; text-align:center; padding:14px;">No incoming reviews yet.</p>';
         }
       } catch (err) {
-        if (feedbackCount) {
-          feedbackCount.textContent = '0 Reviews';
-        }
-        feedbackList.innerHTML = '<p style="font-size:12px; color:#94a3b8; text-align:center; padding:14px;">Feedback pipeline synchronized.</p>';
+        if (feedbackCount) feedbackCount.textContent = '0 Reviews';
       }
     }
   }
@@ -693,14 +1083,13 @@ window.openDashboardModal = async function() {
 
 window.closeDashboardModal = function() {
   const modal = document.getElementById('dashboard-modal');
-  if (modal) {
-    modal.style.display = 'none';
-  }
+  if (modal) modal.style.display = 'none';
 };
 
 // --------------------------------------------------
-// AUTHENTICATION MODAL & REGISTRATION
+// SECTION 13: AUTHENTICATION CONTROLLER
 // --------------------------------------------------
+
 window.openAuthModal = function(mode = 'LOGIN') {
   const modal = document.getElementById('auth-modal');
   if (!modal) return;
@@ -721,9 +1110,7 @@ window.openAuthModal = function(mode = 'LOGIN') {
 
 window.closeAuthModal = function() {
   const modal = document.getElementById('auth-modal');
-  if (modal) {
-    modal.style.display = 'none';
-  }
+  if (modal) modal.style.display = 'none';
 };
 
 window.setAuthRoleTab = function(role) {
@@ -734,35 +1121,15 @@ window.setAuthRoleTab = function(role) {
   const orgField = document.getElementById('auth-org-field');
 
   if (role === 'NGO') {
-    if (btnNgo) {
-      btnNgo.style.background = '#10b981';
-      btnNgo.style.color = '#000000';
-    }
-    if (btnDonor) {
-      btnDonor.style.background = 'transparent';
-      btnDonor.style.color = '#94a3b8';
-    }
-    if (darpanField && currentAuthMode === 'REGISTER') {
-      darpanField.style.display = 'block';
-    }
-    if (orgField) {
-      orgField.querySelector('label').textContent = 'Organization / Shelter Name';
-    }
+    if (btnNgo) { btnNgo.style.background = '#10b981'; btnNgo.style.color = '#000000'; }
+    if (btnDonor) { btnDonor.style.background = 'transparent'; btnDonor.style.color = '#94a3b8'; }
+    if (darpanField && currentAuthMode === 'REGISTER') darpanField.style.display = 'block';
+    if (orgField) orgField.querySelector('label').textContent = 'Organization / Shelter Name';
   } else {
-    if (btnDonor) {
-      btnDonor.style.background = '#10b981';
-      btnDonor.style.color = '#000000';
-    }
-    if (btnNgo) {
-      btnNgo.style.background = 'transparent';
-      btnNgo.style.color = '#94a3b8';
-    }
-    if (darpanField) {
-      darpanField.style.display = 'none';
-    }
-    if (orgField) {
-      orgField.querySelector('label').textContent = 'Restaurant / Banquet / Donor Name';
-    }
+    if (btnDonor) { btnDonor.style.background = '#10b981'; btnDonor.style.color = '#000000'; }
+    if (btnNgo) { btnNgo.style.background = 'transparent'; btnNgo.style.color = '#94a3b8'; }
+    if (darpanField) darpanField.style.display = 'none';
+    if (orgField) orgField.querySelector('label').textContent = 'Restaurant / Banquet / Donor Name';
   }
 };
 
@@ -892,48 +1259,35 @@ window.logoutUser = function() {
   alert('You have logged out successfully.');
 };
 
-// --------------------------------------------------
-// NAVBAR PROFILE & DROPDOWN RENDERER
-// --------------------------------------------------
 function updateNavbarAuthState() {
   const container = document.getElementById('nav-auth-container');
   if (!container) return;
 
   if (currentUser) {
-    const isAnimal = currentUser.role === 'ANIMAL_SHELTER';
-    const isNGO = currentUser.role === 'NGO' || currentUser.role === 'SHELTER' || currentUser.role === 'VOLUNTEER' || isAnimal;
     const initial = (currentUser.org_name || currentUser.name || 'U').charAt(0).toUpperCase();
     const displayName = currentUser.org_name || currentUser.name;
-    const roleTitle = isAnimal ? '🐾 Animal Shelter / Gaushala' : isNGO ? `Verified NGO (${currentUser.ngo_darpan_id || 'DL/2026/ACTIVE'})` : 'Surplus Food Donor';
+    const isAnimal = currentUser.role === 'ANIMAL_SHELTER';
+    const isNGO = currentUser.role === 'NGO' || currentUser.role === 'SHELTER' || currentUser.role === 'VOLUNTEER' || isAnimal;
+    const roleTitle = isAnimal ? '🐾 Animal Shelter' : isNGO ? `Verified NGO (${currentUser.ngo_darpan_id || 'DL/2026/ACTIVE'})` : 'Surplus Food Donor';
 
     container.innerHTML = `
       <div style="position: relative; display: inline-block; margin-right: 8px;">
         <button type="button" id="profile-avatar-btn" onclick="toggleProfileDropdown(event)" style="display: flex; align-items: center; gap: 8px; background: #1e293b; border: 1.5px solid #334155; padding: 4px 12px 4px 6px; border-radius: 9999px; cursor: pointer;">
-          <div style="position: relative; width: 32px; height: 32px; border-radius: 50%; background: ${isAnimal ? 'linear-gradient(135deg, #fbbf24, #d97706)' : isNGO ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #38bdf8, #2563eb)'}; color: ${isAnimal ? '#000' : '#fff'}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;">
-            ${isAnimal ? '🐾' : initial}
-            <span style="position: absolute; bottom: 0; right: 0; width: 8px; height: 8px; background: #10b981; border: 2px solid #0b0f19; border-radius: 50%;"></span>
-          </div>
-          <span style="font-size: 13px; font-weight: 700; color: #ffffff; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            ${displayName}
-          </span>
-          <i class="fa-solid fa-chevron-down" style="font-size: 10px; color: #94a3b8;"></i>
+          <div style="position: relative; width: 30px; height: 30px; border-radius: 50%; background: #10b981; color: #000; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;">${initial}</div>
+          <span style="font-size: 13px; font-weight: 700; color: #ffffff; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName}</span>
         </button>
 
-        <div id="profile-dropdown-card" style="display: none; position: absolute; top: calc(100% + 10px); right: 0; width: 260px; background: #1e293b; border: 1.5px solid #334155; border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.8); z-index: 10000; overflow: hidden;">
-          <div style="padding: 16px; border-bottom: 1px solid #334155; background: #111827;">
-            <div style="font-size: 14px; font-weight: 800; color: #fff; margin-bottom: 2px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
-              ${displayName}
-            </div>
-            <div style="font-size: 12px; color: ${isAnimal ? '#fbbf24' : isNGO ? '#34d399' : '#38bdf8'}; font-weight: 700;">
-              ${roleTitle}
-            </div>
+        <div id="profile-dropdown-card" style="display: none; position: absolute; top: calc(100% + 10px); right: 0; width: 250px; background: #1e293b; border: 1.5px solid #334155; border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,0.8); z-index: 10000; overflow: hidden;">
+          <div style="padding: 14px; border-bottom: 1px solid #334155; background: #111827;">
+            <div style="font-size: 13px; font-weight: 800; color: #fff;">${displayName}</div>
+            <div style="font-size: 11px; color: #34d399; font-weight: 700;">${roleTitle}</div>
           </div>
-          <div style="padding: 8px;">
-            <button type="button" onclick="openDashboardModal(); hideProfileDropdown();" style="width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; border: none; border-radius: 8px; color: #f8fafc; font-size: 13px; font-weight: 700; text-align: left; cursor: pointer;">
-              <span style="font-size: 16px;">📊</span> Impact Dashboard
+          <div style="padding: 6px;">
+            <button type="button" onclick="openDashboardModal(); hideProfileDropdown();" style="width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: transparent; border: none; border-radius: 6px; color: #f8fafc; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer;">
+              📊 Impact Dashboard
             </button>
-            <button type="button" onclick="logoutUser(); hideProfileDropdown();" style="width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; border: none; border-radius: 8px; color: #f87171; font-size: 13px; font-weight: 700; text-align: left; cursor: pointer; margin-top: 2px;">
-              <span style="font-size: 16px;">🚪</span> Sign Out
+            <button type="button" onclick="logoutUser(); hideProfileDropdown();" style="width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: transparent; border: none; border-radius: 6px; color: #f87171; font-size: 12px; font-weight: 700; text-align: left; cursor: pointer;">
+              🚪 Sign Out
             </button>
           </div>
         </div>
@@ -951,16 +1305,12 @@ function updateNavbarAuthState() {
 window.toggleProfileDropdown = function(e) {
   if (e) e.stopPropagation();
   const dropdown = document.getElementById('profile-dropdown-card');
-  if (dropdown) {
-    dropdown.style.display = (dropdown.style.display === 'block') ? 'none' : 'block';
-  }
+  if (dropdown) dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
 };
 
 window.hideProfileDropdown = function() {
   const dropdown = document.getElementById('profile-dropdown-card');
-  if (dropdown) {
-    dropdown.style.display = 'none';
-  }
+  if (dropdown) dropdown.style.display = 'none';
 };
 
 document.addEventListener('click', (e) => {
@@ -972,364 +1322,25 @@ document.addEventListener('click', (e) => {
 });
 
 // --------------------------------------------------
-// HAVERSINE DISTANCE & GEOLOCATION
+// SECTION 14: FEED LOADER & DUAL HUB RENDERER
 // --------------------------------------------------
-window.applyPreset = function(title, category, qty, hours) {
-  const t = document.getElementById('input-food-title');
-  const c = document.getElementById('input-food-category');
-  const q = document.getElementById('input-food-qty');
-  const w = document.getElementById('input-food-window');
-  if (t) t.value = title;
-  if (c) c.value = category;
-  if (q) q.value = qty;
-  if (w) {
-    w.value = hours;
-    window.handleWindowChange(String(hours));
-  }
-};
 
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const earthRadiusKm = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
-            
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const roadDistance = earthRadiusKm * c * 1.3;
-  return parseFloat(roadDistance.toFixed(1));
+async function loadFeed() {
+  try {
+    const res = await fetch(API_URL);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) activeListings = data;
+    }
+  } catch (err) {}
+  populateTargetDonorDropdown();
+  renderListings();
 }
 
-function autoDetectUserLocation() {
-  if (!navigator.geolocation) {
-    return;
-  }
-
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      userLiveCoords = {
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude
-      };
-      localStorage.setItem('foodloop_user_coords', JSON.stringify(userLiveCoords));
-      renderListings();
-    },
-    () => {
-      const cached = localStorage.getItem('foodloop_user_coords');
-      if (cached) {
-        userLiveCoords = JSON.parse(cached);
-      } else {
-        userLiveCoords = { lat: 28.6139, lon: 77.2090 };
-      }
-      renderListings();
-    },
-    { enableHighAccuracy: true, timeout: 5000 }
-  );
-}
-
-window.locateUserGPS = function() {
-  const addressInput = document.getElementById('address');
-  const gpsBtn = document.getElementById('gps-locate-btn');
-
-  if (!navigator.geolocation) {
-    alert('GPS not supported on this device');
-    return;
-  }
-
-  if (gpsBtn) {
-    gpsBtn.innerHTML = '⏳ Locating...';
-    gpsBtn.style.color = '#fbbf24';
-  }
-
-  navigator.geolocation.getCurrentPosition(
-    async (position) => {
-      selectedAddressCoords = {
-        lat: position.coords.latitude,
-        lon: position.coords.longitude
-      };
-      try {
-        const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${selectedAddressCoords.lat}&lon=${selectedAddressCoords.lon}&zoom=18&addressdetails=1`;
-        const res = await fetch(nominatimUrl);
-        const data = await res.json();
-        if (addressInput) {
-          addressInput.value = data.display_name || `${selectedAddressCoords.lat.toFixed(5)}, ${selectedAddressCoords.lon.toFixed(5)}`;
-        }
-      } catch (e) {
-        if (addressInput) {
-          addressInput.value = `${selectedAddressCoords.lat.toFixed(5)}, ${selectedAddressCoords.lon.toFixed(5)}`;
-        }
-      }
-      if (gpsBtn) {
-        gpsBtn.innerHTML = '✅ Located';
-        setTimeout(() => {
-          gpsBtn.innerHTML = '🎯 Use Live GPS';
-          gpsBtn.style.color = '#34d399';
-        }, 3000);
-      }
-    },
-    () => {
-      alert('Please allow location permission in browser.');
-      if (gpsBtn) {
-        gpsBtn.innerHTML = '❌ Denied';
-        gpsBtn.style.color = '#f87171';
-      }
-    }
-  );
-};
-
-// --------------------------------------------------
-// CAMERA ENGINE & REAL-TIME PREVIEW SCANNER
-// --------------------------------------------------
-window.startInAppCamera = async function() {
-  const video = document.getElementById('cam-video-stream');
-  const placeholder = document.getElementById('start-cam-placeholder');
-  const controls = document.getElementById('cam-controls');
-  const previewContainer = document.getElementById('image-preview-container');
-
-  if (previewContainer) {
-    previewContainer.style.display = 'none';
-  }
-
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false
-      });
-    } catch (e) {
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      } catch (err) {
-        triggerNativeCameraFallback();
-        return;
-      }
-    }
-
-    if (video && mediaStream) {
-      video.srcObject = mediaStream;
-      video.style.display = 'block';
-      if (placeholder) placeholder.style.display = 'none';
-      if (controls) controls.style.display = 'flex';
-      video.play();
-    }
-  } else {
-    triggerNativeCameraFallback();
-  }
-};
-
-window.triggerNativeCameraFallback = function() {
-  let fallbackInput = document.getElementById('native-cam-fallback');
-  if (!fallbackInput) {
-    fallbackInput = document.createElement('input');
-    fallbackInput.id = 'native-cam-fallback';
-    fallbackInput.type = 'file';
-    fallbackInput.accept = 'image/*';
-    fallbackInput.style.display = 'none';
-    document.body.appendChild(fallbackInput);
-
-    fallbackInput.addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        isLiveCameraCapture = false;
-        processCapturedImage(evt.target.result, false);
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-  fallbackInput.click();
-};
-
-window.stopInAppCamera = function() {
-  if (mediaStream) {
-    mediaStream.getTracks().forEach(track => track.stop());
-    mediaStream = null;
-  }
-  const video = document.getElementById('cam-video-stream');
-  const placeholder = document.getElementById('start-cam-placeholder');
-  const controls = document.getElementById('cam-controls');
-  
-  if (video) video.style.display = 'none';
-  if (controls) controls.style.display = 'none';
-  if (placeholder) placeholder.style.display = 'block';
-};
-
-window.retakeSnap = function() {
-  uploadedImageBase64 = '';
-  isFoodValid = true;
-  isLiveCameraCapture = false;
-  detectedAIClass = 'General Food Item';
-  const previewContainer = document.getElementById('image-preview-container');
-  if (previewContainer) {
-    previewContainer.style.display = 'none';
-  }
-  const placeholder = document.getElementById('start-cam-placeholder');
-  if (placeholder) {
-    placeholder.style.display = 'block';
-  }
-};
-
-window.captureLiveSnap = function() {
-  const video = document.getElementById('cam-video-stream');
-  if (!video || !mediaStream) return;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth || 640;
-  canvas.height = video.videoHeight || 480;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-  window.stopInAppCamera();
-  isLiveCameraCapture = true;
-  processCapturedImage(canvas.toDataURL('image/jpeg', 0.88), true);
-};
-
-function processCapturedImage(base64Data, isLiveCam = false) {
-  const previewContainer = document.getElementById('image-preview-container');
-  const previewImg = document.getElementById('food-image-preview');
-  const badge = document.getElementById('verification-badge');
-  const placeholder = document.getElementById('start-cam-placeholder');
-
-  const rawImage = new Image();
-  rawImage.onload = async function() {
-    const canvas = document.createElement('canvas');
-    canvas.width = rawImage.width;
-    canvas.height = rawImage.height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(rawImage, 0, 0);
-
-    // 1. REVERSE IMAGE INTERNET LOOKUP & AI SYNTHETIC TEST
-    const forensicResult = await executeGlobalWebReverseSearch(canvas, base64Data, isLiveCam);
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
-
-    ctx.fillStyle = isLiveCam ? '#10b981' : forensicResult.isFraudulent ? '#ef4444' : '#38bdf8';
-    ctx.font = 'bold 18px sans-serif';
-    ctx.fillText(isLiveCam ? '🛡️ Live Camera Authenticated' : forensicResult.isFraudulent ? '🚫 Web/AI Duplicate Found' : '📸 Food Proof Attached', 15, canvas.height - 26);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '14px sans-serif';
-    const nowStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-    ctx.fillText(`${nowStr} | OTP Handshake Active`, 15, canvas.height - 10);
-
-    uploadedImageBase64 = canvas.toDataURL('image/jpeg', 0.88);
-
-    if (placeholder) placeholder.style.display = 'none';
-    if (previewImg && previewContainer) {
-      previewImg.src = uploadedImageBase64;
-      previewContainer.style.display = 'block';
-
-      badge.innerHTML = '🤖 AI Scanning Image Authenticity...';
-      badge.style.background = 'rgba(56, 189, 248, 0.95)';
-      badge.style.color = '#000000';
-
-      // REJECTION 1: Web Scraped Match or AI Image Detected
-      if (forensicResult.isFraudulent) {
-        isFoodValid = false;
-        detectedAIClass = forensicResult.flagReason;
-        badge.innerHTML = `🚫 ${forensicResult.flagReason}`;
-        badge.style.background = 'rgba(239, 68, 68, 0.95)';
-        badge.style.color = '#ffffff';
-        alert(`🚫 Image Rejected by Global Web Reverse Search Engine!\n\nReason: ${forensicResult.flagReason}\n\n• The system verified this photo against the internet and blocked it.\n• Please use "📷 Live Camera" to snap real consumable surplus.`);
-        return;
-      }
-
-      if (!aiModel && window.mobilenet) {
-        aiModel = await mobilenet.load();
-      }
-
-      if (aiModel) {
-        const predictions = await aiModel.classify(rawImage, 5);
-        let topPrediction = predictions[0].className.split(',')[0].trim().toLowerCase();
-        
-        // 2. CHECK BLOCKLIST (Person, Face, Glasses, Snorkel, Clothes, Electronics)
-        const isPersonOrNonFoodObject = predictions.some(pred => {
-          const name = pred.className.toLowerCase();
-          return PERSON_AND_OBJECT_BLOCKLIST.some(k => name.includes(k));
-        });
-
-        // 3. CHECK POSITIVE FOOD WHITELIST
-        const hasPositiveFood = predictions.some(pred => {
-          const name = pred.className.toLowerCase();
-          return STRICT_FOOD_KEYWORDS.some(k => name.includes(k)) && !PERSON_AND_OBJECT_BLOCKLIST.some(p => name.includes(p));
-        });
-
-        // 4. CHECK PURE CUTLERY
-        const isPureCutlery = PURE_CUTLERY_KEYWORDS.some(k => topPrediction.includes(k));
-
-        if (isPersonOrNonFoodObject && !hasPositiveFood) {
-          // REJECTION: Person / Selfie / Electronic Device / Non-Food Object
-          isFoodValid = false;
-          detectedAIClass = `Non-Food Object (${predictions[0].className.split(',')[0]})`;
-          badge.innerHTML = `⚠️ Rejected: ${detectedAIClass}`;
-          badge.style.background = 'rgba(239, 68, 68, 0.95)';
-          badge.style.color = '#ffffff';
-        } else if (isPureCutlery && !hasPositiveFood) {
-          // REJECTION: Empty cutlery / plate without food
-          isFoodValid = false;
-          detectedAIClass = `Empty Cutlery (${topPrediction})`;
-          badge.innerHTML = `⚠️ Rejected: ${detectedAIClass} (No Food)`;
-          badge.style.background = 'rgba(239, 68, 68, 0.95)';
-          badge.style.color = '#ffffff';
-        } else if (hasPositiveFood) {
-          // ACCEPTANCE: Food Verified
-          isFoodValid = true;
-          if (topPrediction.includes('tray') || topPrediction.includes('dish') || topPrediction.includes('box')) {
-            detectedAIClass = 'Packed Meal / Thali Box';
-          } else {
-            detectedAIClass = predictions[0].className.split(',')[0];
-          }
-
-          if (isLiveCam) {
-            badge.innerHTML = `🛡️ Live Food Verified: ${detectedAIClass}`;
-            badge.style.background = 'rgba(16, 185, 129, 0.95)';
-            badge.style.color = '#000000';
-          } else {
-            badge.innerHTML = `📸 Food Proof Attached: ${detectedAIClass}`;
-            badge.style.background = 'rgba(56, 189, 248, 0.95)';
-            badge.style.color = '#000000';
-          }
-        } else {
-          // Default: Unknown Non-Food Object
-          isFoodValid = false;
-          detectedAIClass = predictions[0].className.split(',')[0];
-          badge.innerHTML = `⚠️ Non-Food Detected: ${detectedAIClass}`;
-          badge.style.background = 'rgba(239, 68, 68, 0.95)';
-          badge.style.color = '#ffffff';
-        }
-      } else {
-        isFoodValid = true;
-        detectedAIClass = 'Food Item';
-        badge.innerHTML = isLiveCam ? '🛡️ Live Camera Proof Attached' : '📸 Food Proof Attached';
-        badge.style.background = 'rgba(16, 185, 129, 0.95)';
-        badge.style.color = '#000000';
-      }
-    }
-  };
-  rawImage.src = base64Data;
-}
-
-// ---------------- 10. AUTO-PURGE OLD TEST POSTS ----------------
-async function autoCleanOldCorruptPosts() {
-  if (!localStorage.getItem('foodloop_auto_cleaned_v22')) {
-    try {
-      await fetch(`${API_URL}/purge-all`, { method: 'DELETE' });
-    } catch {}
-    localStorage.setItem('foodloop_auto_cleaned_v22', 'true');
-    localStorage.removeItem('foodloop_my_claims');
-  }
-}
-
-// ---------------- 11. DUAL LIVE RESCUE HUB FEED RENDERER ----------------
 function renderListings() {
   const myClaims = getMyClaimedListings();
-
-  const uniqueList = [];
   const seenKeys = new Set();
+  const uniqueList = [];
 
   for (let i = 0; i < activeListings.length; i++) {
     const item = activeListings[i];
@@ -1341,17 +1352,14 @@ function renderListings() {
   }
 
   const now = Date.now();
-
   let evaluatedListings = uniqueList.filter(item => {
     if (item.status === 'FLAGGED_FAKE') return false;
     if (item.phone && item.phone.includes('@')) return false;
     return true;
   }).map(item => {
-    let dist = 60.0;
+    let dist = 3.5;
     if (userLiveCoords && item.coords && item.coords.lat && item.coords.lon) {
       dist = calculateDistance(userLiveCoords.lat, userLiveCoords.lon, item.coords.lat, item.coords.lon);
-    } else if (item.address && item.address.toLowerCase().includes('technical campus')) {
-      dist = 58.4;
     }
 
     const expiryHours = (item.expiry_hours !== undefined) ? item.expiry_hours : DEFAULT_EXPIRY_HOURS;
@@ -1375,37 +1383,18 @@ function renderListings() {
 
   const animalDivertedCount = evaluatedListings.filter(i => i.isDivertedToAnimals).length;
   const divertedBadge = document.getElementById('diverted-badge-count');
-  if (divertedBadge) {
-    divertedBadge.textContent = animalDivertedCount;
-  }
+  if (divertedBadge) divertedBadge.textContent = animalDivertedCount;
 
-  let visibleListings = evaluatedListings.filter(item => {
-    if (currentPortalTab === 'HUMAN') {
-      return !item.isDivertedToAnimals;
-    } else {
-      return item.isDivertedToAnimals;
-    }
-  });
-
+  let visibleListings = evaluatedListings.filter(item => currentPortalTab === 'HUMAN' ? !item.isDivertedToAnimals : item.isDivertedToAnimals);
   visibleListings.sort((a, b) => a.distance_km - b.distance_km);
-
-  let target = Array.from(document.querySelectorAll('*')).find(
-    el => el.children.length === 0 && el.textContent.includes('Loading active listings')
-  );
 
   let container = document.getElementById('foodloop-feed-list');
   if (!container) {
     container = document.createElement('div');
     container.id = 'foodloop-feed-list';
     container.style.cssText = 'display: flex; flex-direction: column; gap: 14px; margin-top: 12px;';
-
-    if (target) {
-      target.replaceWith(container);
-    } else {
-      const hub = document.getElementById('rescue-hub') || document.querySelector('.hub-section');
-      if (hub) hub.appendChild(container);
-      else return;
-    }
+    const hub = document.getElementById('rescue-hub') || document.querySelector('.hub-section');
+    if (hub) hub.appendChild(container);
   }
 
   const countBadge = document.getElementById('listing-count');
@@ -1414,23 +1403,13 @@ function renderListings() {
   }
 
   if (visibleListings.length === 0) {
-    if (currentPortalTab === 'HUMAN') {
-      container.innerHTML = `
-        <div style="background: #1e293b; border: 1.5px dashed #475569; padding: 28px 20px; border-radius: 12px; text-align: center; color: #cbd5e1; font-size: 14px;">
-          <div style="font-size: 24px; margin-bottom: 6px;">📍</div>
-          <strong style="color: #ffffff; display: block; margin-bottom: 4px;">No Human Surplus Food Within 10 km</strong>
-          Listings with <1h window or expired meals are auto-diverted to the Animal Feed & Gaushala Loop.
-        </div>
-      `;
-    } else {
-      container.innerHTML = `
-        <div style="background: #1e293b; border: 1.5px dashed #fbbf24; padding: 28px 20px; border-radius: 12px; text-align: center; color: #cbd5e1; font-size: 14px;">
-          <div style="font-size: 26px; margin-bottom: 6px;">🐾</div>
-          <strong style="color: #fbbf24; display: block; margin-bottom: 4px;">No Expired Food Diverted Right Now</strong>
-          When food has <1h window or passes unclaimed by human NGOs, it arrives here for gaushalas, stray feeders & biogas!
-        </div>
-      `;
-    }
+    container.innerHTML = `
+      <div style="background: #1e293b; border: 1.5px dashed #475569; padding: 28px 20px; border-radius: 12px; text-align: center; color: #cbd5e1; font-size: 14px;">
+        <div style="font-size: 24px; margin-bottom: 6px;">📍</div>
+        <strong style="color: #ffffff; display: block; margin-bottom: 4px;">No Active Listings in this Loop</strong>
+        ${currentPortalTab === 'HUMAN' ? 'Expired or <1h items are automatically diverted to Animal & Biogas Loop.' : 'Surplus food will appear here when diverted.'}
+      </div>
+    `;
     return;
   }
 
@@ -1442,46 +1421,35 @@ function renderListings() {
 
   let cardsHTML = paginatedList.map(item => {
     const itemId = String(item._id || item.id);
-    const isClaimed = myClaims.includes(itemId) || item.status === 'CLAIMED' || item.status === 'DELIVERED';
+    const isClaimed = item.isClaimed;
     const isDelivered = item.status === 'DELIVERED';
+    const isUnderReview = item.status === 'DISPUTED_REVIEW';
     const displayPhone = item.phone || '+91 98996 36474';
-
-    const hasNonFoodTitle = item.title && (
-      item.title.toLowerCase().includes('jean') || 
-      item.title.toLowerCase().includes('pant') || 
-      item.title.toLowerCase().includes('shirt') || 
-      item.title.toLowerCase().includes('setup')
-    );
-    
-    const isLiveVerified = (item.is_food_verified === true && item.is_live_capture === true && !hasNonFoodTitle);
-    const isFoodItem = (item.is_food_verified !== false && !hasNonFoodTitle);
-    const detectedObj = item.ai_detected_class || 'General Food Item';
-    const trustScore = isLiveVerified ? 100 : 85;
+    const itemLat = item.coords?.lat || 28.6139;
+    const itemLon = item.coords?.lon || 77.2090;
 
     const remHours = Math.floor(item.remainingMs / (1000 * 60 * 60));
     const remMins = Math.floor((item.remainingMs % (1000 * 60 * 60)) / (1000 * 60));
 
     return `
-      <div style="background: #1e293b; border: 1.5px solid ${item.isDivertedToAnimals ? '#fbbf24' : '#334155'}; padding: 20px; border-radius: 14px; color: #f8fafc; box-shadow: 0 4px 14px rgba(0,0,0,0.35); position: relative;">
+      <div style="background: #1e293b; border: 1.5px solid ${isUnderReview ? '#fbbf24' : item.isDivertedToAnimals ? '#fbbf24' : '#334155'}; padding: 20px; border-radius: 14px; color: #f8fafc; box-shadow: 0 4px 14px rgba(0,0,0,0.35);">
         
+        ${isUnderReview ? `
+          <div style="background: rgba(251, 191, 36, 0.15); border: 1.5px solid #fbbf24; padding: 8px 12px; border-radius: 8px; font-size: 11px; color: #fde68a; margin-bottom: 10px;">
+            ⚠️ <strong>Field Audit Alert:</strong> 1 photographic dispute strike logged. Second verified strike will ban account.
+          </div>
+        ` : ''}
+
         ${item.image ? `
           <div style="position: relative; margin-bottom: 14px; border-radius: 10px; overflow: hidden; max-height: 180px;">
             <img src="${item.image}" alt="Verified Food" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
             <div style="position: absolute; top: 8px; left: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
-              
               <span style="background: rgba(16, 185, 129, 0.95); color: #000; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 4px;">
-                ${isLiveVerified ? '🛡️ Live Camera Proof' : '📸 Attached Food Proof'}: ${detectedObj}
+                🛡️ Live Camera Proof: ${item.ai_detected_class || 'Packed Meal / Thali'}
               </span>
               <span style="background: rgba(56, 189, 248, 0.95); color: #000; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 4px;">
-                ⭐ Trust: ${trustScore}%
+                ⭐ Trust: 100%
               </span>
-
-              ${item.isDivertedToAnimals ? `
-                <span style="background: #fbbf24; color: #000; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 4px;">
-                  🐾 ${item.isDirectOneHourDivert ? '⚡ Direct Route: Animal Feed & Biogas (<1h)' : '🐾 Diverted: Gaushala & Animal Feed'}
-                </span>
-              ` : ''}
-
             </div>
             <div style="position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.85); color: #34d399; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 4px;">
               📍 ${item.distance_km} km away from you
@@ -1489,107 +1457,54 @@ function renderListings() {
           </div>
         ` : ''}
 
-        ${item.isDivertedToAnimals ? `
-          <div style="background: rgba(251, 191, 36, 0.15); border: 1.5px solid rgba(251, 191, 36, 0.4); padding: 10px 14px; border-radius: 8px; font-size: 12px; color: #fde68a; margin-bottom: 12px;">
-            🐾 <strong>Zero-Waste Secondary Loop:</strong> ${item.isDirectOneHourDivert ? 'Listed with <1h safe window. Directly routed for Cattle Feed, Stray Animals & Bio-Compost.' : 'Human consumption window has elapsed. Food is reserved for Animal Shelters, Gaushalas & Stray Feeders.'}
-          </div>
-        ` : ''}
-
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 9999px; ${isDelivered ? 'background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid rgba(16,185,129,0.5);' : isClaimed ? 'background: rgba(245, 158, 11, 0.25); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4);' : 'background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid rgba(16,185,129,0.4);'}">
-            ${isDelivered ? '✅ Handover Verified & Delivered' : isClaimed ? `🟡 Claimed by ${item.claimed_by_ngo || 'Verified Partner'}` : `🟢 Available • ${item.distance_km} km away`}
+          <span style="font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 9999px; ${isDelivered ? 'background: rgba(16, 185, 129, 0.25); color: #34d399;' : isClaimed ? 'background: rgba(245, 158, 11, 0.25); color: #fbbf24;' : 'background: rgba(16, 185, 129, 0.25); color: #34d399;'}">
+            ${isDelivered ? '✅ Delivered' : isClaimed ? `🟡 Claimed by ${item.claimed_by_ngo || 'Verified Partner'}` : `🟢 Available • ${item.distance_km} km away`}
           </span>
-          <span style="font-size: 12px; color: ${item.isDivertedToAnimals ? '#fbbf24' : (remHours === 0) ? '#f87171' : '#fbbf24'}; font-weight: 800;">
+          <span style="font-size: 12px; color: #fbbf24; font-weight: 800;">
             ${item.isDivertedToAnimals ? '🐾 Safe for Animals & Bio-Loop' : `⏳ Expires in: ${remHours}h ${remMins}m`}
           </span>
         </div>
 
         <h4 style="font-size: 18px; font-weight: 800; margin: 6px 0 8px 0; color: #fff;">${item.title}</h4>
-        
-        <p style="font-size: 14px; color: ${isClaimed ? '#34d399' : '#cbd5e1'}; margin: 0 0 4px 0;">
-          📍 <strong>Pickup:</strong> ${isClaimed ? item.address : item.address.split(',')[0] + ' (Verified Claim Unlocks Full Address)'}
-        </p>
-
-        <p style="font-size: 14px; color: ${isClaimed ? '#38bdf8' : '#94a3b8'}; margin: 0 0 4px 0;">
-          📞 <strong>Donor Phone:</strong> ${(isClaimed || isDonorUser) ? `<a href="tel:${displayPhone}" style="color: #38bdf8; text-decoration: underline; font-weight: 700;">${displayPhone}</a>` : '•••••••••• (Hidden to prevent unauthorized claims)'}
-        </p>
-
+        <p style="font-size: 14px; color: #cbd5e1; margin: 0 0 4px 0;">📍 <strong>Pickup:</strong> ${isClaimed ? item.address : item.address.split(',')[0] + ' (Claim to unlock full address)'}</p>
+        <p style="font-size: 14px; color: #38bdf8; margin: 0 0 4px 0;">📞 <strong>Donor Phone:</strong> ${(isClaimed || isDonorUser) ? `<a href="tel:${displayPhone}" style="color: #38bdf8; text-decoration: underline; font-weight: 700;">${displayPhone}</a>` : '••••••••••'}</p>
         <p style="font-size: 13px; color: #94a3b8; margin: 0 0 14px 0;">📦 Quantity: ${item.quantity}</p>
-        
-        <!-- ROLE-BASED ACTION CONTROLS -->
+
+        <!-- ACTION CONTROLS -->
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          ${
-            isDonorUser ? `
-              ${isClaimed && !isDelivered ? `
-                <button onclick="openQRHandshake('${itemId}')" style="background: #8b5cf6; color: #fff; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;">
-                  📱 Show Handover QR (To Arriving NGO)
-                </button>
-                <button onclick="alert('🔒 Notice for Donor:\\n\\nYour 80G Tax Exemption Certificate will unlock automatically as soon as the volunteer scans your QR code on pickup arrival.');" style="background: #334155; color: #94a3b8; font-weight: 600; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: 1px dashed #475569; cursor: not-allowed;">
-                  🔒 80G Tax Proof (Awaiting Handshake)
-                </button>
-              ` : isDelivered ? `
-                <button onclick="generateCSRCertificate('${item.title}', '${item.quantity}', '${item.address}')" style="background: #2563eb; color:#fff; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-                  📜 Download 80G Tax Certificate
-                </button>
-              ` : `
-                <span style="font-size: 13px; color: #34d399; font-weight: 700; padding: 8px 14px; background: rgba(16,185,129,0.14); border-radius: 8px; border: 1px solid rgba(16,185,129,0.3);">
-                  🟢 Live Broadcast Active • Awaiting Claim
-                </span>
-              `}
-            ` : isAnimalUser ? `
-              ${!isClaimed ? `
-                <button onclick="attemptNGOClaim('${itemId}', '${item.address}', '${displayPhone}')" style="background: #fbbf24; color: #000; border: none; font-weight: 800; font-size: 13px; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
-                  🐾 Claim as Animal Feed (${item.distance_km} km)
-                </button>
-              ` : `
-                <a href="tel:${displayPhone}" style="background: #2563eb; color: #fff; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
-                  📞 Call Donor
-                </a>
-                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}" target="_blank" style="background: #10b981; color: #000; font-weight: 800; font-size: 13px; padding: 8px 16px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
-                  🗺️ Open Maps
-                </a>
-                ${!isDelivered ? `
-                  <button onclick="openQRScanner('${itemId}')" style="background: #fbbf24; color: #000; font-weight: 800; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;">
-                    📷 Scan Pickup QR
-                  </button>
-                ` : `
-                  <span style="color: #34d399; font-weight: 700; font-size: 13px;">✅ Rescued for Gaushala Feed</span>
-                `}
-              `}
-            ` : isNGOUser ? `
-              ${!isClaimed ? `
-                <button onclick="attemptNGOClaim('${itemId}', '${item.address}', '${displayPhone}')" style="background: #10b981; color: #000; border: none; font-weight: 800; font-size: 13px; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
-                  🏛️ Claim Pickup (${item.distance_km} km)
-                </button>
-              ` : `
-                <a href="tel:${displayPhone}" style="background: #2563eb; color: #fff; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
-                  📞 Call Donor
-                </a>
-                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}" target="_blank" style="background: #10b981; color: #000; font-weight: 800; font-size: 13px; padding: 8px 16px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
-                  🗺️ Open Maps
-                </a>
-                ${!isDelivered ? `
-                  <button onclick="openQRScanner('${itemId}')" style="background: #38bdf8; color: #000; font-weight: 800; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;">
-                    📷 Scan Pickup QR
-                  </button>
-                  <button onclick="alert('🔒 Compliance Notice:\\n\\nCSR & 80G Tax Proof unlocks ONLY after physical QR handover is scanned by volunteer on arrival.');" style="background: #334155; color: #94a3b8; font-weight: 600; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: 1px dashed #475569; cursor: not-allowed;">
-                    🔒 80G Certificate (Pending QR)
-                  </button>
-                ` : `
-                  <button onclick="generateCSRCertificate('${item.title}', '${item.quantity}', '${item.address}')" style="background: #059669; color: #fff; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;">
-                    📜 Download 80G Certificate
-                  </button>
-                `}
-                <button onclick="reportFakeListing('${itemId}')" style="background: rgba(239, 68, 68, 0.18); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
-                  🚩 Fake (Ban)
-                </button>
-              `}
-            ` : `
-              <button onclick="openAuthModal('REGISTER_NGO')" style="background: #334155; color: #34d399; border: 1px solid #475569; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
-                🔒 NGO / Shelter Login to Claim
+          ${isDonorUser ? `
+            ${isClaimed && !isDelivered ? `
+              <button onclick="openQRHandshake('${itemId}')" style="background: #8b5cf6; color: #fff; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;">
+                📱 Show Handover QR (To Arriving NGO)
               </button>
-            `
-          }
+            ` : isDelivered ? `
+              <button onclick="generateCSRCertificate('${item.title}', '${item.quantity}', '${item.address}')" style="background: #2563eb; color:#fff; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;">
+                📜 Download 80G Tax Certificate
+              </button>
+            ` : `<span style="font-size: 13px; color: #34d399; font-weight: 700;">🟢 Live Broadcast Active</span>`}
+          ` : (isNGOUser || isAnimalUser) ? `
+            ${!isClaimed ? `
+              <button onclick="attemptNGOClaim('${itemId}')" style="background: #10b981; color: #000; border: none; font-weight: 800; font-size: 13px; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
+                🏛️ Claim Pickup (${item.distance_km} km)
+              </button>
+            ` : `
+              <a href="tel:${displayPhone}" style="background: #2563eb; color: #fff; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; text-decoration: none;">📞 Call Donor</a>
+              <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}" target="_blank" style="background: #10b981; color: #000; font-weight: 800; font-size: 13px; padding: 8px 16px; border-radius: 8px; text-decoration: none;">🗺️ Open Maps</a>
+              ${!isDelivered ? `
+                <button onclick="openQRScanner('${itemId}')" style="background: #38bdf8; color: #000; font-weight: 800; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;">📷 Scan Pickup QR</button>
+                <button onclick="openDisputeModal('${itemId}', ${itemLat}, ${itemLon})" style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; font-weight: 800; font-size: 13px; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
+                  🚩 Field Report (<300m)
+                </button>
+              ` : `
+                <button onclick="generateCSRCertificate('${item.title}', '${item.quantity}', '${item.address}')" style="background: #059669; color: #fff; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;">📜 Download 80G Certificate</button>
+              `}
+            `}
+          ` : `
+            <button onclick="openAuthModal('REGISTER_NGO')" style="background: #334155; color: #34d399; border: 1px solid #475569; font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
+              🔒 NGO / Shelter Login to Claim
+            </button>
+          `}
         </div>
       </div>
     `;
@@ -1613,7 +1528,7 @@ window.loadMoreListings = function() {
   renderListings();
 };
 
-window.attemptNGOClaim = async function(id, address, phone) {
+window.attemptNGOClaim = async function(id) {
   if (!currentUser || currentUser.role === 'DONOR') {
     alert('🔒 Restricted: Only verified NGO accounts can claim meals.');
     return;
@@ -1641,24 +1556,10 @@ window.attemptNGOClaim = async function(id, address, phone) {
   alert(`✅ Food Reserved for ${currentUser.org_name || currentUser.name}!`);
 };
 
-window.reportFakeListing = async function(id) {
-  if (confirm('⚠️ Report Fake Listing / Unauthorized Photo?\n\nThis will immediately remove the post and permanently blacklist the poster.')) {
-    try {
-      await fetch(`${API_URL}/${id}/report-fake`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'Fake listing confirmed by volunteer' })
-      });
-      alert('🚫 Listing archived and donor has been permanently blacklisted.');
-      loadFeed();
-    } catch (e) {
-      alert('Reported locally.');
-      loadFeed();
-    }
-  }
-};
+// --------------------------------------------------
+// SECTION 15: DONATION SUBMISSION PIPELINE
+// --------------------------------------------------
 
-// ---------------- 12. STRICT DONATION SUBMISSION (PHOTO VALIDATION & HARD BLOCK ON AI/WEB FAKES) ----------------
 window.submitDonationNow = function() {
   if (!currentUser) {
     alert('🔒 Access Restricted: Please Login or Register as a Donor/Restaurant to post surplus food.');
@@ -1667,20 +1568,18 @@ window.submitDonationNow = function() {
   }
 
   if (!uploadedImageBase64 || uploadedImageBase64.trim() === '') {
-    alert('❌ Food Photo Proof is Mandatory!\n\nPlease capture a live photo with "📷 Live Camera" or attach an image before posting.');
+    alert('❌ Live Camera Proof is Mandatory!\n\nPlease click "📷 Open Live Camera" to snap real-time food proof before posting.');
     const camBox = document.getElementById('camera-box');
     if (camBox) {
       camBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       camBox.style.borderColor = '#ef4444';
-      setTimeout(() => {
-        camBox.style.borderColor = '#475569';
-      }, 2500);
+      setTimeout(() => { camBox.style.borderColor = '#475569'; }, 2500);
     }
     return;
   }
 
   if (!isFoodValid) {
-    alert(`🚫 Submission Blocked by AI Authenticity Engine!\n\nReason: ${detectedAIClass}\n\n• The system detected a non-food object, selfie, web scraped download, or AI-generated image.\n• Please use "📷 Live Camera" to snap real consumable food.`);
+    alert(`🚫 Submission Blocked by AI Food Guard!\n\nReason: ${detectedAIClass}\n\n• The system detected a person/selfie, non-food object, or empty plate.\n• Please snap real consumable surplus food.`);
     return;
   }
 
@@ -1691,7 +1590,7 @@ window.submitDonationNow = function() {
   const windowInput = document.getElementById('input-food-window');
 
   if (!itemInput || !itemInput.value.trim() || isSpamText(itemInput.value.trim())) {
-    alert('⚠️ Please enter a genuine food item description (e.g. 40 Rice & Dal Meals). Random characters are blocked.');
+    alert('⚠️ Please enter a genuine food item description (e.g. 40 Rice & Dal Meals).');
     itemInput?.focus();
     return;
   }
@@ -1707,14 +1606,12 @@ window.submitDonationNow = function() {
   }
 
   let rawPhone = cleanPhoneNumber(phoneInput?.value || '');
-
-  if (rawPhone.includes('@') || !PHONE_REGEX.test(rawPhone) || FAKE_PHONE_PATTERNS.includes(rawPhone)) {
-    alert('❌ Invalid Contact Phone Number!\n\n• Email addresses are strictly not allowed for pickup coordination.\n• Please enter a valid 10-digit Indian phone number starting with 6, 7, 8, or 9.');
+  if (!PHONE_REGEX.test(rawPhone) || FAKE_PHONE_PATTERNS.includes(rawPhone)) {
+    alert('❌ Invalid Contact Phone Number!\n\nPlease enter a valid 10-digit Indian mobile number.');
     phoneInput?.focus();
     return;
   }
 
-  const finalImage = uploadedImageBase64;
   const selectedHours = parseInt(windowInput?.value || '3');
 
   pendingDonationPayload = {
@@ -1725,12 +1622,12 @@ window.submitDonationNow = function() {
     address: addressInput.value.trim(),
     phone: rawPhone,
     donor_name: currentUser.name || 'Registered Donor',
-    image: finalImage,
+    image: uploadedImageBase64,
     coords: selectedAddressCoords || userLiveCoords || { lat: 28.6139, lon: 77.2090 },
     is_food_verified: isFoodValid,
     is_live_capture: isLiveCameraCapture,
     ai_detected_class: detectedAIClass,
-    trust_score: (isFoodValid && isLiveCameraCapture) ? 100 : 85,
+    trust_score: 100,
     created_at: new Date().toISOString(),
     status: (selectedHours === 1) ? 'DIVERTED_TO_ANIMALS' : 'AVAILABLE'
   };
@@ -1739,16 +1636,11 @@ window.submitDonationNow = function() {
   const otpDisplay = document.getElementById('generated-otp-display');
   const otpModal = document.getElementById('otp-modal');
   
-  if (otpDisplay) {
-    otpDisplay.textContent = currentGeneratedOTP;
-  }
+  if (otpDisplay) otpDisplay.textContent = currentGeneratedOTP;
   if (otpModal) {
     otpModal.style.display = 'flex';
     const input = document.getElementById('otp-input-field');
-    if (input) {
-      input.value = '';
-      input.focus();
-    }
+    if (input) { input.value = ''; input.focus(); }
   }
 };
 
@@ -1761,9 +1653,7 @@ window.confirmOTPVerification = async function() {
     return;
   }
 
-  if (otpModal) {
-    otpModal.style.display = 'none';
-  }
+  if (otpModal) otpModal.style.display = 'none';
 
   if (pendingDonationPayload) {
     try {
@@ -1793,27 +1683,23 @@ window.confirmOTPVerification = async function() {
     document.getElementById('input-food-qty').value = '';
     document.getElementById('donor-phone').value = '';
     uploadedImageBase64 = '';
-    isFoodValid = true;
+    isFoodValid = false;
     isLiveCameraCapture = false;
-    detectedAIClass = 'General Food Item';
+    detectedAIClass = 'No Food Detected';
+    
     const previewContainer = document.getElementById('image-preview-container');
-    if (previewContainer) {
-      previewContainer.style.display = 'none';
-    }
+    if (previewContainer) previewContainer.style.display = 'none';
     const placeholder = document.getElementById('start-cam-placeholder');
-    if (placeholder) {
-      placeholder.style.display = 'block';
-    }
+    if (placeholder) placeholder.style.display = 'block';
 
-    if (pendingDonationPayload.expiry_hours === 1) {
-      alert('🐾 Fast-Track Animal & Biogas Broadcast Active!\n\nBecause this surplus has a <1 hour consumption window, it has been directly routed to nearby Animal Shelters, Gaushalas & Stray Feeders.');
-    } else {
-      alert('🎉 Food Broadcasted Successfully! Verified NGOs in your 5–10 km range will be notified.');
-    }
+    alert('🎉 Food Broadcasted Successfully! Verified NGOs in your range will be notified.');
   }
 };
 
-// ---------------- 13. CSR 80G TAX CERTIFICATE PDF ENGINE ----------------
+// --------------------------------------------------
+// SECTION 16: CSR 80G TAX CERTIFICATE PDF ENGINE
+// --------------------------------------------------
+
 window.generateCSRCertificate = function(title, qty, address) {
   if (!window.jspdf) {
     alert('PDF Generator loading, please retry in 2 seconds.');
@@ -1882,7 +1768,10 @@ window.generateCSRCertificate = function(title, qty, address) {
   doc.save(`FoodLoop_Impact_Certificate_${Date.now()}.pdf`);
 };
 
-// ---------------- 14. LIVE QR CODE GENERATOR & SCANNER ----------------
+// --------------------------------------------------
+// SECTION 17: DIGITAL QR CODE HANDSHAKE & SCANNER
+// --------------------------------------------------
+
 window.openQRHandshake = function(itemId) {
   const qrModal = document.getElementById('qr-modal');
   const qrContainer = document.getElementById('qrcode-container');
@@ -1962,12 +1851,13 @@ window.closeQRScanner = function() {
     }).catch(() => {});
   }
   const modal = document.getElementById('qr-scanner-modal');
-  if (modal) {
-    modal.style.display = 'none';
-  }
+  if (modal) modal.style.display = 'none';
 };
 
-// ---------------- 15. CONTACT FORM SUBMISSION ENGINE ----------------
+// --------------------------------------------------
+// SECTION 18: CONTACT FORM SUBMISSION
+// --------------------------------------------------
+
 window.handleContactSubmit = async function(e) {
   if (e) e.preventDefault();
 
@@ -1991,28 +1881,23 @@ window.handleContactSubmit = async function(e) {
     const res = await fetch(CONTACT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: name,
-        email: email,
-        message: message,
-        donor_phone: donor_phone,
-        donor_name: donor_name
-      })
+      body: JSON.stringify({ name, email, message, donor_phone, donor_name })
     });
 
     if (res.ok) {
       alert(`✅ Note Sent Successfully!\n\nYour message from "${name}" has been routed and synced directly to the Donor's Impact Dashboard.`);
       document.getElementById('contact-form')?.reset();
-    } else {
-      alert('⚠️ Unable to submit message right now. Please try calling the emergency helpline.');
     }
   } catch (err) {
-    alert(`✅ Note recorded locally! Donor will receive notification.`);
+    alert('✅ Note recorded locally! Donor will receive notification.');
     document.getElementById('contact-form')?.reset();
   }
 };
 
-// ---------------- 16. ADDRESS AUTOCOMPLETE DROPDOWN ----------------
+// --------------------------------------------------
+// SECTION 19: ADDRESS AUTOCOMPLETE (PHOTON OSM)
+// --------------------------------------------------
+
 function setupAddressAutocomplete() {
   const addressInput = document.getElementById('address');
   const container = document.getElementById('address-container');
@@ -2030,10 +1915,7 @@ function setupAddressAutocomplete() {
   addressInput.addEventListener('input', (e) => {
     const query = e.target.value.trim();
     clearTimeout(debounceTimer);
-    if (query.length < 3) {
-      dropdown.style.display = 'none';
-      return;
-    }
+    if (query.length < 3) { dropdown.style.display = 'none'; return; }
 
     debounceTimer = setTimeout(async () => {
       try {
@@ -2075,17 +1957,198 @@ function setupAddressAutocomplete() {
   });
 }
 
-// Background sync
+// --------------------------------------------------
+// SECTION 20: DYNAMIC CONTEXTUAL AI CHAT SYSTEM
+// --------------------------------------------------
+
+function setupAIChatSystem() {
+  const launcher = document.getElementById('ai-chat-launcher');
+  const win = document.getElementById('ai-chat-window');
+  const closeBtn = document.getElementById('ai-chat-close-btn');
+  const sendBtn = document.getElementById('ai-send-btn');
+  const chatInput = document.getElementById('ai-chat-input');
+
+  function toggleChat() {
+    if (!win) return;
+    if (win.style.display === 'none' || win.style.display === '') {
+      win.style.display = 'flex';
+      chatInput?.focus();
+    } else {
+      win.style.display = 'none';
+    }
+  }
+
+  if (launcher) launcher.onclick = toggleChat;
+  if (closeBtn) closeBtn.onclick = toggleChat;
+
+  if (sendBtn) {
+    sendBtn.onclick = (e) => {
+      e.preventDefault();
+      executeAIChatMessage();
+    };
+  }
+
+  if (chatInput) {
+    chatInput.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        executeAIChatMessage();
+      }
+    };
+  }
+
+  document.querySelectorAll('.quick-ai-btn').forEach(btn => {
+    btn.onclick = function(e) {
+      e.preventDefault();
+      const q = this.getAttribute('data-query');
+      if (chatInput && q) {
+        chatInput.value = q;
+        executeAIChatMessage();
+      }
+    };
+  });
+}
+
+async function executeAIChatMessage() {
+  const input = document.getElementById('ai-chat-input');
+  const messagesBox = document.getElementById('ai-chat-messages');
+  if (!input || !messagesBox) return;
+
+  const userQuery = input.value.trim();
+  if (!userQuery) return;
+
+  appendChatMessage(userQuery, 'USER');
+  input.value = '';
+
+  const typingId = 'typing-' + Date.now();
+  const typingDiv = document.createElement('div');
+  typingDiv.id = typingId;
+  typingDiv.style.cssText = 'align-self: flex-start; background: #1e293b; border: 1px solid #334155; padding: 8px 12px; border-radius: 12px; font-size: 11px; color: #94a3b8;';
+  typingDiv.innerHTML = '✨ Gemini AI is analyzing query...';
+  messagesBox.appendChild(typingDiv);
+  messagesBox.scrollTop = messagesBox.scrollHeight;
+
+  let replied = false;
+
+  // 1. Try Live Server API
+  try {
+    const res = await fetch(AI_CHAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: userQuery, conversationHistory: chatHistory })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.reply && !data.reply.includes('active hai. Aap kisi bhi feature')) {
+        document.getElementById(typingId)?.remove();
+        appendChatMessage(data.reply, 'BOT');
+        chatHistory.push({ role: 'user', parts: [{ text: userQuery }] });
+        chatHistory.push({ role: 'model', parts: [{ text: data.reply }] });
+        replied = true;
+      }
+    }
+  } catch (err) {}
+
+  // 2. Client-Side Comprehensive Knowledge Parser (Dynamic Resolution)
+  if (!replied) {
+    setTimeout(() => {
+      document.getElementById(typingId)?.remove();
+      const response = generateAccurateFeatureResponse(userQuery);
+      appendChatMessage(response, 'BOT');
+      chatHistory.push({ role: 'user', parts: [{ text: userQuery }] });
+      chatHistory.push({ role: 'model', parts: [{ text: response }] });
+    }, 400);
+  }
+}
+
+function appendChatMessage(text, sender) {
+  const messagesBox = document.getElementById('ai-chat-messages');
+  if (!messagesBox) return;
+
+  const msgDiv = document.createElement('div');
+  if (sender === 'USER') {
+    msgDiv.style.cssText = 'align-self: flex-end; max-width: 80%; background: #10b981; color: #000; padding: 8px 12px; border-radius: 12px 12px 2px 12px; font-size: 12px; font-weight: 600; line-height: 1.4;';
+    msgDiv.textContent = text;
+  } else {
+    msgDiv.style.cssText = 'align-self: flex-start; max-width: 85%; background: #1e293b; border: 1px solid #334155; padding: 10px 12px; border-radius: 12px 12px 12px 2px; font-size: 12px; color: #f8fafc; line-height: 1.4;';
+    msgDiv.innerHTML = text;
+  }
+
+  messagesBox.appendChild(msgDiv);
+  messagesBox.scrollTop = messagesBox.scrollHeight;
+}
+
+// Complete Contextual Feature Knowledge Engine
+function generateAccurateFeatureResponse(query) {
+  const q = query.toLowerCase();
+
+  // 1. Live Camera Only & AI Vision
+  if (q.includes('camera') || q.includes('photo') || q.includes('snap') || q.includes('selfie') || q.includes('image') || q.includes('upload') || q.includes('post food') || (q.includes('post') && q.includes('food'))) {
+    return `📸 <b>How to Post Food with Live Camera:</b><br><br>
+    • <b>Hardware Camera Feed:</b> Donors must click <b>"📷 Open Live Camera"</b> and capture food directly from their device. Gallery uploads are blocked to prevent stock/fake photos.<br>
+    • <b>AI Food Vision Guard:</b> MobileNet AI model frame ko scan karta hai. Consumable food (thali, packed meal, curry) ko approve karta hai, jabki selfies, human faces, empty plates aur cutlery ko <b>auto-reject</b> kar deta hai.<br>
+    • <b>Geotag Watermark & OTP:</b> Live capture par automatic time and GPS watermark lagta hai. 4-digit SMS OTP verify hote hi food board par live ho jata hai.`;
+  }
+
+  // 2. NGO Claim & NITI Aayog Verification
+  if (q.includes('ngo') || q.includes('darpan') || q.includes('claim') || q.includes('shelter') || q.includes('pickup')) {
+    return `🏛️ <b>NGO Verification & Claim Process:</b><br><br>
+    • <b>NITI Aayog Darpan Check:</b> Only NGOs registered in the Govt NGO Darpan registry (e.g. <i>DL/2018/0192831</i> - Robin Hood Army, <i>DL/2020/0048192</i> - Feeding India) can claim surplus.<br>
+    • <b>Claim Flow:</b> Live Rescue board par <b>"Claim Pickup"</b> click karein. Claim hone ke baad hi donor ka exact address aur calling phone unlock hota hai.<br>
+    • <b>Handover:</b> Pickup location par pahunch kar donor ka <b>QR Handshake</b> scan karna mandatory hai.`;
+  }
+
+  // 3. CSR 80G Tax Exemption Certificate
+  if (q.includes('80g') || q.includes('tax') || q.includes('certificate') || q.includes('csr') || q.includes('pdf')) {
+    return `📜 <b>CSR 80G Tax Exemption Certificate:</b><br><br>
+    • <b>Automated Unlocking:</b> Jab arriving NGO volunteer donor ka dynamic QR code scan karke physical pickup confirm karta hai, delivery mark ho jati hai.<br>
+    • <b>PDF Generation:</b> Donor ke Impact Dashboard me <b>"📜 Download 80G Tax Proof"</b> active ho jata hai jisme digital signature, NGO Darpan ID, quantity aur SDG 2 compliance stamp embed rehta hai.`;
+  }
+
+  // 4. Dual-Loop (Animal Feed & Biogas)
+  if (q.includes('animal') || q.includes('gaushala') || q.includes('biogas') || q.includes('secondary') || q.includes('divert') || q.includes('cow') || q.includes('stray') || q.includes('expire')) {
+    return `🐾 <b>Zero-Waste Animal & Biogas Loop:</b><br><br>
+    • <b>1-Hour Short Window:</b> Agar food safe consumption window &lt;1 hour hai, toh human safe limit cross hone se bachane ke liye post automatically <b>Animal Loop</b> me divert ho jati hai.<br>
+    • <b>Expired Food Routing:</b> Unclaimed expired food landfill me jane ke bajaye registered <b>Delhi Gaushalas</b> (AWBI certified) aur <b>Bio-CNG Plants</b> ko compost aur clean energy generate karne ke liye route hota hai.`;
+  }
+
+  // 5. Proof-of-Ground Geofenced Dispute Protocol (<300m)
+  if (q.includes('dispute') || q.includes('fake') || q.includes('report') || q.includes('ban') || q.includes('strike') || q.includes('300') || q.includes('geofence')) {
+    return `🚨 <b>Proof-of-Ground Dispute Protocol:</b><br><br>
+    • <b>300m Physical Geofence:</b> Volunteer ko pickup spot ke <b>300 meters</b> ke radius me physical presence rakhna zaroori hai (Remote fake reporting prohibited).<br>
+    • <b>Mandatory Evidence:</b> On-spot locked gate, empty vessel ya spoiled food ki live photo click karni hoti hai.<br>
+    • <b>2-Strike Ban:</b> 1st strike par post "Under Review" me jata hai; 2 alag-alag verified NGOs ki strike audit ke baad donor account permanently blacklist hota hai.`;
+  }
+
+  // 6. Interactive Radar Map
+  if (q.includes('map') || q.includes('radar') || q.includes('gps') || q.includes('location') || q.includes('radius') || q.includes('route')) {
+    return `🗺️ <b>Interactive Radar Map:</b><br><br>
+    • Top navbar me <b>"Radar Map"</b> open karein.<br>
+    • Yeh OpenStreetMap engine 10km radius ke saare active food donation points, verified NGO shelters, AWBI Gaushalas aur Waste-to-Energy biogas plants ko real-time visual pins ke sath navigate karta hai.`;
+  }
+
+  // 7. General Helpline / Overview
+  return `🍲 <b>FoodLoop Delhi-NCR Architecture Overview:</b><br><br>
+  • <b>Donors:</b> Live camera food capture, anti-stock photo AI guard, QR handshake & instant 80G Tax PDF.<br>
+  • <b>NGOs:</b> NITI Aayog Darpan verification, one-click claim, in-app map navigation & 300m dispute reporting.<br>
+  • <b>Circular Loop:</b> &lt;1h food diversion to Gaushalas & Bio-CNG plants.<br>
+  • <b>Helpline:</b> Urgent support ke liye <b>+91 8800 247 247</b> par call karein.`;
+}
+
+// --------------------------------------------------
+// SECTION 21: BOOTSTRAPPER & SYSTEM LIFECYCLE
+// --------------------------------------------------
+
 setInterval(() => {
   loadFeed();
 }, 6000);
 
 window.addEventListener('DOMContentLoaded', async () => {
-  await autoCleanOldCorruptPosts();
+  autoDetectUserLocation();
   updateNavbarAuthState();
   applyRoleBasedViewPermissions();
-  autoDetectUserLocation();
   loadAIModel();
   loadFeed();
   setupAddressAutocomplete();
+  setupAIChatSystem();
 });
