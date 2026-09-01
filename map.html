@@ -1,414 +1,322 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FoodLoop | Radar Map</title>
-  
-  <!-- Fonts & Icons -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-  
-  <!-- Leaflet CSS for OpenStreetMap (No API Key Required) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  
-  <style>
-    :root {
-      --primary: #10b981;
-      --primary-dark: #059669;
-      --surface-1: #0b0f19;
-      --surface-2: #1e293b;
-      --surface-3: #111827;
-      --border-color: #334155;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FoodLoop - Live Radar Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <style>
+        :root {
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --bg-dark: #0f172a;
+            --card-bg: #1e293b;
+            --text-light: #f8fafc;
+            --text-muted: #94a3b8;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --blue: #3b82f6;
+        }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'DM Sans', sans-serif;
-    }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
 
-    body {
-      background-color: var(--surface-1);
-      color: var(--text-main);
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
-    }
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
 
-    /* Top Navigation */
-    .map-header {
-      background: var(--surface-2);
-      border-bottom: 1.5px solid var(--border-color);
-      padding: 12px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      z-index: 1000;
-    }
+        /* Header */
+        header {
+            background-color: #111827;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+            z-index: 1000;
+        }
 
-    .brand-link {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 22px;
-      font-weight: 800;
-      color: #fff;
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+        .logo {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--text-light);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
-    .brand-link span {
-      color: var(--primary);
-    }
+        .logo span {
+            color: var(--primary);
+        }
 
-    .brand-dot {
-      width: 8px;
-      height: 8px;
-      background: var(--primary);
-      border-radius: 50%;
-      display: inline-block;
-      margin-left: 2px;
-      box-shadow: 0 0 10px var(--primary);
-    }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
 
-    .header-controls {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+        .btn {
+            background-color: var(--card-bg);
+            color: var(--text-light);
+            border: 1px solid #334155;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
 
-    .btn-nav-back {
-      color: #cbd5e1;
-      font-size: 13px;
-      font-weight: 700;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: 6px;
-      transition: all 0.2s;
-    }
+        .btn:hover {
+            background-color: #334155;
+        }
 
-    .btn-nav-back:hover {
-      color: #fff;
-      background: #334155;
-    }
+        .btn-primary {
+            background-color: var(--primary);
+            color: #000000;
+            border: none;
+        }
 
-    .btn-recenter {
-      background: var(--primary);
-      color: #000;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 800;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-      transition: transform 0.2s;
-    }
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            color: #ffffff;
+        }
 
-    .btn-recenter:hover {
-      transform: scale(1.03);
-    }
+        /* Map Container */
+        #map-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
 
-    /* Map Layout */
-    .map-container-layout {
-      display: flex;
-      flex: 1;
-      height: calc(100vh - 65px);
-      position: relative;
-    }
+        #map {
+            width: 100%;
+            height: 100%;
+            background-color: #0b0f19;
+        }
 
-    /* Sidebar Control Panel */
-    .map-sidebar {
-      width: 400px;
-      background: var(--surface-2);
-      border-right: 1.5px solid var(--border-color);
-      display: flex;
-      flex-direction: column;
-      z-index: 500;
-      overflow: hidden;
-    }
+        /* Controls / Floating Panels */
+        .floating-panel {
+            position: absolute;
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(8px);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 14px 18px;
+            z-index: 999;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
 
-    .sidebar-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border-color);
-      background: var(--surface-3);
-    }
+        .legend-panel {
+            top: 16px;
+            right: 16px;
+            max-width: 280px;
+        }
 
-    .live-eyebrow {
-      font-size: 10px;
-      font-weight: 800;
-      color: var(--primary);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 4px;
-    }
+        .legend-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 4px;
+        }
 
-    .delhi-tag {
-      background: rgba(16, 185, 129, 0.15);
-      color: #34d399;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      border: 1px solid rgba(16, 185, 129, 0.3);
-    }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
 
-    .sidebar-header h2 {
-      font-size: 22px;
-      font-family: 'Space Grotesk', sans-serif;
-      color: #fff;
-      font-weight: 800;
-      margin-bottom: 6px;
-    }
+        .legend-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
 
-    .gps-status-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
+        .gps-status-panel {
+            bottom: 24px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
 
-    .gps-pulse-dot {
-      width: 8px;
-      height: 8px;
-      background: #38bdf8;
-      border-radius: 50%;
-      box-shadow: 0 0 8px #38bdf8;
-    }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            box-shadow: 0 0 10px var(--primary);
+            animation: pulse 1.5s infinite;
+        }
 
-    /* Category Filter Tabs */
-    .filter-pills {
-      padding: 12px 16px;
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      background: var(--surface-1);
-      border-bottom: 1px solid var(--border-color);
-    }
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
 
-    .filter-btn {
-      background: var(--surface-2);
-      border: 1px solid var(--border-color);
-      color: #cbd5e1;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: all 0.2s;
-    }
+        .recenter-btn {
+            position: absolute;
+            bottom: 24px;
+            right: 20px;
+            background-color: var(--primary);
+            color: #000000;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 9999px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            z-index: 999;
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
 
-    .filter-btn.active {
-      background: var(--primary);
-      color: #000;
-      border-color: var(--primary);
-      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
-    }
+        .recenter-btn:hover {
+            background-color: var(--primary-dark);
+            color: #ffffff;
+            transform: translateY(-2px);
+        }
 
-    /* Location List */
-    .locations-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 14px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
+        /* Leaflet Popup Custom Styling */
+        .leaflet-popup-content-wrapper {
+            background: #1e293b !important;
+            color: #f8fafc !important;
+            border: 1px solid #475569 !important;
+            border-radius: 10px !important;
+            padding: 6px !important;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6) !important;
+        }
 
-    .location-card {
-      background: var(--surface-3);
-      border: 1.5px solid var(--border-color);
-      border-radius: 10px;
-      padding: 14px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
+        .leaflet-popup-tip {
+            background: #1e293b !important;
+        }
 
-    .location-card:hover {
-      border-color: var(--primary);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(0,0,0,0.4);
-    }
+        .popup-content {
+            font-size: 13px;
+            line-height: 1.4;
+        }
 
-    .location-card-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
+        .popup-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
 
-    .loc-badge {
-      font-size: 10px;
-      font-weight: 800;
-      padding: 2px 8px;
-      border-radius: 4px;
-      text-transform: uppercase;
-    }
+        .popup-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-bottom: 6px;
+        }
 
-    .badge-ngo { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.4); }
-    .badge-animal { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid rgba(251,191,36,0.4); }
-    .badge-biogas { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); }
-    .badge-food { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.4); }
+        .popup-badge-food {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+        }
 
-    .loc-distance {
-      font-size: 11px;
-      color: #38bdf8;
-      font-weight: 700;
-    }
+        .popup-badge-ngo {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
 
-    .loc-title {
-      font-size: 14px;
-      font-weight: 800;
-      color: #fff;
-      margin-bottom: 4px;
-    }
-
-    .loc-address {
-      font-size: 11px;
-      color: var(--text-muted);
-      line-height: 1.4;
-      margin-bottom: 8px;
-    }
-
-    .loc-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .btn-card-action {
-      background: #334155;
-      color: #fff;
-      border: none;
-      padding: 5px 12px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      cursor: pointer;
-    }
-
-    .btn-card-action:hover {
-      background: var(--primary);
-      color: #000;
-    }
-
-    /* Map Display */
-    #foodloop-map {
-      flex: 1;
-      height: 100%;
-      background: #e5e7eb;
-      z-index: 100;
-    }
-
-    /* Custom Leaflet Popup */
-    .leaflet-popup-content-wrapper {
-      background: #1e293b !important;
-      color: #fff !important;
-      border: 1.5px solid #334155;
-      border-radius: 12px !important;
-      box-shadow: 0 16px 32px rgba(0,0,0,0.8);
-    }
-    .leaflet-popup-tip {
-      background: #1e293b !important;
-    }
-    .leaflet-popup-content {
-      margin: 12px 14px !important;
-      line-height: 1.5;
-    }
-
-    /* Mobile Responsive */
-    @media (max-width: 860px) {
-      .map-container-layout {
-        flex-direction: column-reverse;
-      }
-      .map-sidebar {
-        width: 100%;
-        height: 45%;
-        border-right: none;
-        border-top: 1.5px solid var(--border-color);
-      }
-      #foodloop-map {
-        height: 55%;
-      }
-    }
-  </style>
+        .popup-badge-animal {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+        }
+    </style>
 </head>
 <body>
 
-  <!-- Map Header -->
-  <header class="map-header">
-    <a href="index.html" class="brand-link">
-      food<span>loop</span><span class="brand-dot"></span>
-    </a>
+    <header>
+        <a href="index.html" class="logo">
+            🍲 Food<span>Loop</span>
+        </a>
+        <div class="header-actions">
+            <a href="index.html" class="btn">
+                <i class="fa-solid fa-arrow-left"></i> Back to Main App
+            </a>
+            <button class="btn btn-primary" onclick="locateAndCenterUser(true)">
+                <i class="fa-solid fa-location-crosshairs"></i> Refresh Live GPS
+            </button>
+        </div>
+    </header>
 
-    <div class="header-controls">
-      <a href="index.html" class="btn-nav-back">
-        ← Back to Home
-      </a>
-      <button type="button" onclick="locateUserAndCenter()" class="btn-recenter">
-        📍 Recenter GPS
-      </button>
+    <div id="map-container">
+        <div id="map"></div>
+
+        <!-- Legend Panel -->
+        <div class="floating-panel legend-panel">
+            <div class="legend-title">Active 10km Grid</div>
+            <div class="legend-item">
+                <span class="legend-icon">📍</span>
+                <span><strong>Your Location</strong> (Center)</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-icon">🍲</span>
+                <span>Surplus Food Donation</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-icon">🏛️</span>
+                <span>Verified NGO Shelter</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-icon">🐾</span>
+                <span>AWBI Gaushala / Animal Loop</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-icon">⚡</span>
+                <span>Bio-CNG Energy Plant</span>
+            </div>
+        </div>
+
+        <!-- GPS Status Bar -->
+        <div class="floating-panel gps-status-panel">
+            <div class="status-dot"></div>
+            <span id="gps-status-text" style="font-size: 13px; font-weight: 600;">Scanning GPS Sensor...</span>
+        </div>
+
+        <!-- Recenter Button -->
+        <button class="recenter-btn" onclick="locateAndCenterUser(true)">
+            <i class="fa-solid fa-location-arrow"></i> Target My Location
+        </button>
     </div>
-  </header>
 
-  <!-- Main Map Container -->
-  <div class="map-container-layout">
-    
-    <!-- Sidebar Controls -->
-    <aside class="map-sidebar">
-      <div class="sidebar-header">
-        <div class="live-eyebrow">
-          <span>Live Rescue Network</span>
-          <span class="delhi-tag">Delhi-NCR</span>
-        </div>
-        <h2>Radar Map</h2>
-        <div class="gps-status-row">
-          <span class="gps-pulse-dot"></span>
-          <span id="radar-status-text">Scanning nearby verified hubs...</span>
-        </div>
-      </div>
-
-      <!-- Category Filter Pills -->
-      <div class="filter-pills">
-        <button type="button" class="filter-btn active" onclick="filterMapCategory('ALL')">All Locations</button>
-        <button type="button" class="filter-btn" onclick="filterMapCategory('NGO')">🏛️ Verified NGOs</button>
-        <button type="button" class="filter-btn" onclick="filterMapCategory('ANIMAL')">🐾 Animal Shelters</button>
-        <button type="button" class="filter-btn" onclick="filterMapCategory('BIOGAS')">⚡ Biogas & Bio-Loop</button>
-        <button type="button" class="filter-btn" onclick="filterMapCategory('DONATION')">🍲 Live Surplus Posts</button>
-      </div>
-
-      <!-- List of Locations -->
-      <div class="locations-list" id="locations-list"></div>
-    </aside>
-
-    <!-- Interactive OpenStreetMap (Free, No Watermark) -->
-    <div id="foodloop-map"></div>
-  </div>
-
-  <!-- Leaflet Core Script -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="map.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Map Logic Script -->
+    <script src="map.js"></script>
 </body>
 </html>
